@@ -284,7 +284,23 @@ namespace wumgr
             proc.StartInfo = startInfo;
             proc.EnableRaisingEvents = true;
             proc.Start();
-            proc.WaitForExit();
+
+            if (silent)
+            {
+                proc.OutputDataReceived += (s, e) => { };
+                proc.ErrorDataReceived += (s, e) => { };
+                proc.BeginOutputReadLine();
+                proc.BeginErrorReadLine();
+            }
+
+            while (!proc.WaitForExit(500))
+            {
+                if (Canceled)
+                {
+                    try { proc.Kill(); } catch { }
+                    return -1;
+                }
+            }
 
             return proc.ExitCode;
         }

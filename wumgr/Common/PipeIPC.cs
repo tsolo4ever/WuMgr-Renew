@@ -87,12 +87,14 @@ class PipeIPC
     {
         public event EventHandler<EventArgs> Connected;
 
-        public PipeServer(string pipeName)
+        public PipeServer(string pipeName, bool fullControl = false)
         {
             PipeSecurity pipeSa = new PipeSecurity();
-            pipeSa.SetAccessRule(new PipeAccessRule(new SecurityIdentifier(FileOps.SID_Worls), PipeAccessRights.FullControl, AccessControlType.Allow));
+            PipeAccessRights rights = fullControl ? PipeAccessRights.FullControl : PipeAccessRights.ReadWrite;
+            pipeSa.SetAccessRule(new PipeAccessRule(new SecurityIdentifier(FileOps.SID_Worls), rights, AccessControlType.Allow));
             int buffLen = 1029; // 4 + 1024 + 1
-            pipeStream = new NamedPipeServerStream(pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Message, PipeOptions.Asynchronous,  buffLen, buffLen,  pipeSa);
+            // NamedPipeServerStream constructor with PipeSecurity was removed in .NET 10; use the ACL factory
+            pipeStream = NamedPipeServerStreamAcl.Create(pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Message, PipeOptions.Asynchronous, buffLen, buffLen, pipeSa);
             pipeStream.BeginWaitForConnection(new AsyncCallback(PipeConnected), null);
         }
 
@@ -160,6 +162,7 @@ class PipeIPC
 
     private List<PipeServer> serverPipes;
     private List<PipeClient> clientPipes;
+    private bool mFullControl = false;
 
     public PipeIPC(string PipeName)
     {
@@ -175,9 +178,10 @@ class PipeIPC
     public delegate void DelegateMessage(PipeServer pipe, string data);
     public event DelegateMessage PipeMessage;
 
-    public void Listen()
+    public void Listen(bool fullControl = false)
     {
-        PipeServer serverPipe = new PipeServer(mPipeName);
+        mFullControl = fullControl;
+        PipeServer serverPipe = new PipeServer(mPipeName, mFullControl);
         serverPipes.Add(serverPipe);
 
         serverPipe.DataReceived += (sndr, data) => {
@@ -188,7 +192,7 @@ class PipeIPC
 
         serverPipe.Connected += (sndr, args) => {
             mDispatcher.Invoke(new Action(() => {
-                Listen();
+                Listen(mFullControl);
             }));
         };
 

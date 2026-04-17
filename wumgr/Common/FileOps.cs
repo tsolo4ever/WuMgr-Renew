@@ -121,7 +121,7 @@ class FileOps
         //fs.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.Delete, AccessControlType.Allow));
 
         //flush security access.
-        File.SetAccessControl(filePath, fs);
+        new FileInfo(filePath).SetAccessControl(fs);
     }
 
     static public bool TestWrite(string filePath)
@@ -210,9 +210,10 @@ class FileOps
             TokenManipulator.AddPrivilege("SeTakeOwnershipPrivilege");
 
 
-            FileSecurity ac = File.GetAccessControl(path);
+            FileInfo fi = new FileInfo(path);
+            FileSecurity ac = fi.GetAccessControl();
             ac.SetOwner(new SecurityIdentifier(FileOps.SID_Admins));
-            File.SetAccessControl(path, ac);
+            fi.SetAccessControl(ac);
         }
         catch (PrivilegeNotHeldException err)
         {

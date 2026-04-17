@@ -15,4 +15,12 @@
     <FallbackCulture>en-US</FallbackCulture>
     <VerifyUploadedFiles>false</VerifyUploadedFiles>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="Common\ListViewExtended.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="WuMgr.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
 </Project>

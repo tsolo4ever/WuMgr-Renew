@@ -193,7 +193,7 @@ class HttpTask
                 else if (key.Equals("Content-Disposition", StringComparison.CurrentCultureIgnoreCase))
                 {
                     string cd = task.response.Headers[key];
-                    fileName = cd.Substring(cd.IndexOf("filename=") + 9).Replace("\"", "");
+                    fileName = Path.GetFileName(cd.Substring(cd.IndexOf("filename=") + 9).Replace("\"", ""));
                 }
                 else if (key.Equals("Last-Modified", StringComparison.CurrentCultureIgnoreCase))
                 {

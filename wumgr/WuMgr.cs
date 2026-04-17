@@ -41,17 +41,30 @@ namespace wumgr
         //public const Int32 MF_REMOVE = 0x1000;
 
         public const Int32 MYMENU_ABOUT = 1000;
+        public const Int32 MYMENU_WUAU = 1001;
+        public const Int32 MYMENU_REFRESH = 1002;
+        public const Int32 MYMENU_TOOLS_BASE = 2000;
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert);
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern bool InsertMenu(IntPtr hMenu, Int32 wPosition, Int32 wFlags, Int32 wIDNewItem, string lpNewItem);
-        [DllImport("user32.dll")]
-        private static extern int AppendMenu(IntPtr hMenu, int Flags, int NewID, String Item);
+        [DllImport("user32.dll", EntryPoint = "InsertMenuW", CharSet = CharSet.Unicode)]
+        private static extern bool InsertMenuPopup(IntPtr hMenu, Int32 wPosition, Int32 wFlags, IntPtr wIDNewItem, string lpNewItem);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool AppendMenu(IntPtr hMenu, int Flags, int NewID, string Item);
+        [DllImport("user32.dll", EntryPoint = "AppendMenuW", CharSet = CharSet.Unicode)]
+        private static extern bool AppendMenuPopup(IntPtr hMenu, int Flags, IntPtr NewID, string Item);
         [DllImport("user32.dll")]
         static extern int GetMenuItemCount(IntPtr hMenu);
         [DllImport("user32.dll")]
         static extern bool RemoveMenu(IntPtr hMenu, uint uPosition, uint uFlags);
+        [DllImport("user32.dll")]
+        private static extern IntPtr CreatePopupMenu();
+        [DllImport("user32.dll")]
+        private static extern bool DestroyMenu(IntPtr hMenu);
+        [DllImport("user32.dll")]
+        private static extern uint CheckMenuItem(IntPtr hMenu, int uIDCheckItem, int uCheck);
 
         protected override void WndProc(ref Message msg)
         {
@@ -59,10 +72,9 @@ namespace wumgr
             {
                 case WM_SYSCOMMAND:
                     {
-                        switch (msg.WParam.ToInt32())
-                        {
-                            case MYMENU_ABOUT: menuAbout_Click(null, null); return;
-                        }
+                        int cmd = msg.WParam.ToInt32();
+                        if (cmd == MYMENU_ABOUT) { menuAbout_Click(null, null); return; }
+                        if (mMenuHandlers != null && mMenuHandlers.TryGetValue(cmd, out Action handler)) { handler(); return; }
                     }
                     break;
             }
@@ -86,6 +98,14 @@ namespace wumgr
 
         private bool mSuspendUpdate = false;
         GPO.Respect mGPORespect = GPO.Respect.Unknown;
+
+        // Tray icons — priority-colored
+        private Icon mTrayIconNone = null;
+        private Icon mTrayIconDriver = null;
+        private Icon mTrayIconNonCritical = null;
+        private Icon mTrayIconSecurity = null;
+
+        private enum TrayPriority { None, Driver, NonCritical, Security }
         float mWinVersion = 0.0f;
 
         enum AutoUpdateOptions
@@ -98,6 +118,7 @@ namespace wumgr
 
         AutoUpdateOptions AutoUpdate = AutoUpdateOptions.No;
         int IdleDelay = 0;
+
         DateTime LastCheck = DateTime.MaxValue;
 
         float mSearchBoxHeight = 0.0f;
@@ -111,30 +132,46 @@ namespace wumgr
             //notifyIcon1.Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location);
             notifyIcon.Text = Program.mName;
 
+            notifyIcon.Visible = true;
             if (Program.TestArg("-tray"))
-            {
                 allowshowdisplay = false;
-                notifyIcon.Visible = true;
-            }
 
             if(!MiscFunc.IsRunningAsUwp())
-                this.Text = string.Format("{0} v{1} by David Xanatos", Program.mName, Program.mVersion);
+                this.Text = string.Format("{0} v{1}", Program.mName, Program.mVersion);
 
             Localize();
 
-            btnSearch.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_available_updates_32, new Size(25, 25)));
-            btnInstall.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_software_installer_32, new Size(25, 25)));
-            btnDownload.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_downloading_updates_32, new Size(25, 25)));
-            btnUnInstall.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_trash_32, new Size(25, 25)));
-            btnHide.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_hide_32, new Size(25, 25)));
-            btnGetLink.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_link_32, new Size(25, 25)));
-            btnCancel.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.icons8_cancel_32, new Size(25, 25)));
+            lblPatreon.Visible = false;
+
+            btnSearch.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.available_updates, new Size(25, 25)));
+            btnInstall.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.software_installer, new Size(25, 25)));
+            btnDownload.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.downloading_updates, new Size(25, 25)));
+            btnUnInstall.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.trash, new Size(25, 25)));
+            btnHide.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.hide, new Size(25, 25)));
+            btnGetLink.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.link, new Size(25, 25)));
+            btnCancel.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.cancel, new Size(25, 25)));
+
+            mTrayIconNone        = global::wumgr.Properties.Resources.tray_none;
+            mTrayIconDriver      = global::wumgr.Properties.Resources.tray_driver;
+            mTrayIconNonCritical = global::wumgr.Properties.Resources.tray_noncritical;
+            mTrayIconSecurity    = global::wumgr.Properties.Resources.tray_security;
+            notifyIcon.Icon = mTrayIconNone;
+            this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
             AppLog.Logger += LineLogger;
 
             foreach (string line in AppLog.GetLog())
                 logBox.AppendText(line + Environment.NewLine);
             logBox.ScrollToCaret();
+
+            var logMenu = new ContextMenuStrip();
+            var miCopyAll = new ToolStripMenuItem("Copy All");
+            miCopyAll.Click += (s, e) => { logBox.SelectAll(); logBox.Copy(); logBox.DeselectAll(); };
+            var miCopySel = new ToolStripMenuItem("Copy Selected");
+            miCopySel.Click += (s, e) => logBox.Copy();
+            logMenu.Opening += (s, e) => miCopySel.Enabled = logBox.SelectionLength > 0;
+            logMenu.Items.AddRange(new ToolStripItem[] { miCopyAll, miCopySel });
+            logBox.ContextMenuStrip = logMenu;
 
 
             agent = WuAgent.GetInstance();
@@ -205,6 +242,12 @@ namespace wumgr
             chkOffline.Checked = MiscFunc.parseInt(GetConfig("Offline", "0")) != 0;
             chkDownload.Checked = MiscFunc.parseInt(GetConfig("Download", "1")) != 0;
             chkManual.Checked = MiscFunc.parseInt(GetConfig("Manual", "0")) != 0;
+            chkPipeFullCtrl.Checked = MiscFunc.parseInt(GetConfig("PipeFullControl", "0")) != 0;
+
+            string savedMode = GetConfig("ColorMode", "system");
+            dlColorMode.SelectedIndex = savedMode.Equals("classic", StringComparison.OrdinalIgnoreCase) ? 1
+                : savedMode.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+
             if (!MiscFunc.IsAdministrator())
             {
                 if (MiscFunc.IsRunningAsUwp())
@@ -272,32 +315,34 @@ namespace wumgr
                 tabs.Enabled = false;
 
 
-            mToolsMenu = new MenuItem();
-            mToolsMenu.Text = Translate.fmt("menu_tools");
-
+            // Build Tools popup via Win32 — MenuItem is non-functional in .NET 10
+            mToolsMenuHandle = CreatePopupMenu();
             BuildToolsMenu();
 
-            notifyIcon.ContextMenu = new ContextMenu();
-
-            MenuItem menuAbout = new MenuItem();
-            menuAbout.Text = Translate.fmt("menu_about"); 
-            menuAbout.Click += new System.EventHandler(menuAbout_Click);
-
-            MenuItem menuExit = new MenuItem();
-            menuExit.Text = Translate.fmt("menu_exit"); 
-            menuExit.Click += new System.EventHandler(menuExit_Click);
-
-            notifyIcon.ContextMenu.MenuItems.AddRange(new MenuItem[] { mToolsMenu, menuAbout, new MenuItem("-"), menuExit });
-
+            // NotifyIcon.ContextMenu removed in .NET 10; use ContextMenuStrip
+            ContextMenuStrip trayMenu = new ContextMenuStrip();
+            ToolStripMenuItem tsOpen = new ToolStripMenuItem("Open WuMgr");
+            tsOpen.Click += (s, e) => { allowshowdisplay = true; this.Show();
+                if (this.WindowState == FormWindowState.Minimized) this.WindowState = FormWindowState.Normal;
+                SetForegroundWindow(this.Handle.ToInt32()); };
+            ToolStripMenuItem tsCheck = new ToolStripMenuItem("Check for Updates");
+            tsCheck.Click += (s, e) => { allowshowdisplay = true; this.Show(); btnSearch_Click(s, e); };
+            ToolStripMenuItem tsAbout = new ToolStripMenuItem(Translate.fmt("menu_about"));
+            tsAbout.Click += menuAbout_Click;
+            ToolStripMenuItem tsExit = new ToolStripMenuItem(Translate.fmt("menu_exit"));
+            tsExit.Click += menuExit_Click;
+            trayMenu.Items.AddRange(new ToolStripItem[] {
+                tsOpen, tsCheck, new ToolStripSeparator(), tsAbout, new ToolStripSeparator(), tsExit });
+            notifyIcon.ContextMenuStrip = trayMenu;
 
             IntPtr MenuHandle = GetSystemMenu(this.Handle, false); // Note: to restore default set true
-            InsertMenu(MenuHandle, 5, MF_BYPOSITION | MF_SEPARATOR, 0, string.Empty); // <-- Add a menu seperator
-            InsertMenu(MenuHandle, 6, MF_BYPOSITION | MF_POPUP, (int)mToolsMenu.Handle, mToolsMenu.Text);
-            InsertMenu(MenuHandle, 7, MF_BYPOSITION, MYMENU_ABOUT, menuAbout.Text);
+            InsertMenu(MenuHandle, 5, MF_BYPOSITION | MF_SEPARATOR, 0, string.Empty);
+            InsertMenuPopup(MenuHandle, 6, MF_BYPOSITION | MF_POPUP, mToolsMenuHandle, Translate.fmt("menu_tools"));
+            InsertMenu(MenuHandle, 7, MF_BYPOSITION, MYMENU_ABOUT, Translate.fmt("menu_about"));
 
 
             UpdateCounts();
-            SwitchList(UpdateLists.UpdateHistory);
+            SwitchList(UpdateLists.PendingUpdates);
 
             doUpdte = Program.TestArg("-update");
 
@@ -307,7 +352,45 @@ namespace wumgr
             mTimer.Enabled = true;
 
             Program.ipc.PipeMessage += new PipeIPC.DelegateMessage(PipesMessageHandler);
-            Program.ipc.Listen();
+            Program.ipc.Listen(chkPipeFullCtrl.Checked);
+
+            // Apply dark visual styles after all handles are created
+            this.Shown += (s, e) => {
+                if (GetConfig("ColorMode", "system").Equals("dark", StringComparison.OrdinalIgnoreCase))
+                    ApplyControlTheme(this, true);
+            };
+        }
+
+        private static readonly Color s_darkBg = Color.FromArgb(32, 32, 32);
+        private static readonly Color s_darkFg = Color.FromArgb(220, 220, 220);
+
+        private void ApplyControlTheme(Control parent, bool dark)
+        {
+            foreach (Control ctrl in parent.Controls)
+            {
+                if (ctrl is CheckBox chk)
+                {
+                    chk.FlatStyle = dark ? FlatStyle.Flat : FlatStyle.Standard;
+                    chk.UseVisualStyleBackColor = !dark;
+                    chk.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    chk.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
+                else if (ctrl is RadioButton rb)
+                {
+                    rb.FlatStyle = dark ? FlatStyle.Flat : FlatStyle.Standard;
+                    rb.UseVisualStyleBackColor = !dark;
+                    rb.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    rb.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
+                else if (ctrl is GroupBox gb)
+                {
+                    gb.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                    gb.BackColor = dark ? s_darkBg : SystemColors.Control;
+                }
+
+                if (ctrl.Controls.Count > 0)
+                    ApplyControlTheme(ctrl, dark);
+            }
         }
 
         private void PipesMessageHandler(PipeIPC.PipeServer pipe, string data)
@@ -432,8 +515,9 @@ namespace wumgr
             agent.Finished -= OnFinished;
         }
 
-        private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
+        private void notifyIcon_MouseClick(object sender, MouseEventArgs e)
         {
+            if (e.Button != MouseButtons.Left) return;
             if (allowshowdisplay)
             {
                 allowshowdisplay = false;
@@ -443,6 +527,9 @@ namespace wumgr
             {
                 allowshowdisplay = true;
                 this.Show();
+                if (this.WindowState == FormWindowState.Minimized)
+                    this.WindowState = FormWindowState.Normal;
+                SetForegroundWindow(this.Handle.ToInt32());
             }
         }
 
@@ -465,6 +552,46 @@ namespace wumgr
             btnInstalled.Text = Translate.fmt("lbl_inst_upd", agent.mInstalledUpdates.Count);
             btnHidden.Text = Translate.fmt("lbl_block_upd", agent.mHiddenUpdates.Count);
             btnHistory.Text = Translate.fmt("lbl_old_upd", agent.mUpdateHistory.Count);
+            UpdateTrayTip();
+        }
+
+        private void UpdateTrayTip()
+        {
+            int count = agent.mPendingUpdates.Count;
+            notifyIcon.Text = count > 0
+                ? string.Format("{0} — {1} update{2} pending", Program.mName, count, count == 1 ? "" : "s")
+                : Program.mName;
+            UpdateTrayIcon();
+        }
+
+        private TrayPriority GetUpdatePriority()
+        {
+            if (agent.mPendingUpdates.Count == 0)
+                return TrayPriority.None;
+
+            TrayPriority priority = TrayPriority.Driver;
+            foreach (MsUpdate upd in agent.mPendingUpdates)
+            {
+                string cat = upd.Category ?? "";
+                if (cat.IndexOf("Security", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    cat.IndexOf("Critical", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return TrayPriority.Security;  // highest — short-circuit
+                if (cat.IndexOf("Driver", StringComparison.OrdinalIgnoreCase) < 0)
+                    priority = TrayPriority.NonCritical;
+            }
+            return priority;
+        }
+
+        private void UpdateTrayIcon()
+        {
+            if (mTrayIconNone == null) return; // not yet initialized
+            switch (GetUpdatePriority())
+            {
+                case TrayPriority.Security:    notifyIcon.Icon = mTrayIconSecurity;    break;
+                case TrayPriority.NonCritical: notifyIcon.Icon = mTrayIconNonCritical; break;
+                case TrayPriority.Driver:      notifyIcon.Icon = mTrayIconDriver;      break;
+                default:                       notifyIcon.Icon = mTrayIconNone;        break;
+            }
         }
 
         void LoadList()
@@ -472,7 +599,7 @@ namespace wumgr
             ignoreChecks = true;
             updateView.CheckBoxes = CurrentList != UpdateLists.UpdateHistory;
             ignoreChecks = false;
-            updateView.ForeColor = updateView.CheckBoxes && !agent.IsValid() ? Color.Gray : Color.Black;
+            updateView.ForeColor = updateView.CheckBoxes && !agent.IsValid() ? SystemColors.GrayText : SystemColors.WindowText;
 
             switch (CurrentList)
             {
@@ -678,17 +805,21 @@ namespace wumgr
             btnGetLink.Enabled = isChecked && CurrentList != UpdateLists.UpdateHistory;
         }
 
-        private MenuItem mToolsMenu = null;
-        private MenuItem wuauMenu = null;
+        private IntPtr mToolsMenuHandle = IntPtr.Zero;
+        private bool mWuAuChecked = false;
+        private Dictionary<int, Action> mMenuHandlers = new Dictionary<int, Action>();
+        private int mNextMenuId = MYMENU_TOOLS_BASE;
 
         private void BuildToolsMenu()
         {
-            wuauMenu = new MenuItem();
-            wuauMenu.Text = Translate.fmt("menu_wuau");
-            wuauMenu.Checked = agent.TestWuAuServ();
-            wuauMenu.Click += new System.EventHandler(menuWuAu_Click);
-            mToolsMenu.MenuItems.Add(wuauMenu);
-            mToolsMenu.MenuItems.Add(new MenuItem("-"));
+            mMenuHandlers.Clear();
+            mNextMenuId = MYMENU_TOOLS_BASE;
+
+            // Windows Update Service toggle
+            mWuAuChecked = agent.TestWuAuServ();
+            AppendMenu(mToolsMenuHandle, MF_STRING | (mWuAuChecked ? MF_CHECKED : MF_UNCHECKED), MYMENU_WUAU, Translate.fmt("menu_wuau"));
+            mMenuHandlers[MYMENU_WUAU] = () => menuWuAu_Click(null, null);
+            AppendMenu(mToolsMenuHandle, MF_SEPARATOR, 0, null);
 
             if (Directory.Exists(Program.GetToolsPath()))
             {
@@ -696,48 +827,40 @@ namespace wumgr
                 {
                     string Name = Path.GetFileName(subDir);
                     string INIPath = subDir + @"\" + Name + ".ini";
-
-                    MenuItem toolMenu = new MenuItem();
-                    toolMenu.Text = Program.IniReadValue("Root", "Name", Name, INIPath);
-
+                    string menuText = Program.IniReadValue("Root", "Name", Name, INIPath);
                     string Exec = Program.IniReadValue("Root", "Exec", "", INIPath);
                     bool Silent = MiscFunc.parseInt(Program.IniReadValue("Root", "Silent", "0", INIPath)) != 0;
+
                     if (Exec.Length > 0)
-                        toolMenu.Click += delegate (object sender, EventArgs e) { menuExec_Click(sender, e, Exec, subDir, Silent); };
+                    {
+                        int id = mNextMenuId++;
+                        string capturedExec = Exec; string capturedDir = subDir; bool capturedSilent = Silent;
+                        AppendMenu(mToolsMenuHandle, MF_STRING, id, menuText);
+                        mMenuHandlers[id] = () => menuExec_Click(null, null, capturedExec, capturedDir, capturedSilent);
+                    }
                     else
                     {
+                        IntPtr subPopup = CreatePopupMenu();
                         int count = MiscFunc.parseInt(Program.IniReadValue("Root", "Entries", "", INIPath), 99);
                         for (int i = 1; i <= count; i++)
                         {
                             string name = Program.IniReadValue("Entry" + i.ToString(), "Name", "", INIPath);
-                            if (name.Length == 0)
-                            {
-                                if (count != 99)
-                                    continue;
-                                break;
-                            }
-
-                            MenuItem subMenu = new MenuItem();
-                            subMenu.Text = name;
-
+                            if (name.Length == 0) { if (count != 99) continue; break; }
                             string exec = Program.IniReadValue("Entry" + i.ToString(), "Exec", "", INIPath);
                             bool silent = MiscFunc.parseInt(Program.IniReadValue("Entry" + i.ToString(), "Silent", "0", INIPath)) != 0;
-                            subMenu.Click += delegate (object sender, EventArgs e) { menuExec_Click(sender, e, exec, subDir, silent); };
-
-                            toolMenu.MenuItems.Add(subMenu);
+                            int id = mNextMenuId++;
+                            string capturedExec = exec; string capturedDir = subDir; bool capturedSilent = silent;
+                            AppendMenu(subPopup, MF_STRING, id, name);
+                            mMenuHandlers[id] = () => menuExec_Click(null, null, capturedExec, capturedDir, capturedSilent);
                         }
+                        AppendMenuPopup(mToolsMenuHandle, MF_POPUP, subPopup, menuText);
                     }
-
-                    mToolsMenu.MenuItems.Add(toolMenu);
                 }
-
-                mToolsMenu.MenuItems.Add(new MenuItem("-"));
+                AppendMenu(mToolsMenuHandle, MF_SEPARATOR, 0, null);
             }
 
-            MenuItem refreshMenu = new MenuItem();
-            refreshMenu.Text = Translate.fmt("menu_refresh");
-            refreshMenu.Click += new System.EventHandler(menuRefresh_Click);
-            mToolsMenu.MenuItems.Add(refreshMenu);
+            AppendMenu(mToolsMenuHandle, MF_STRING, MYMENU_REFRESH, Translate.fmt("menu_refresh"));
+            mMenuHandlers[MYMENU_REFRESH] = () => menuRefresh_Click(null, null);
         }
 
         private void menuExec_Click(object Sender, EventArgs e, string exec, string dir, bool silent = false)
@@ -756,20 +879,21 @@ namespace wumgr
         private void menuAbout_Click(object Sender, EventArgs e)
         {
             string About = "";
+            About += string.Format("{0} v{1}\r\n", Program.mName, Program.mVersion);
+            About += "\r\n";
             About += "Author: \tDavid Xanatos\r\n";
             About += "Licence: \tGNU General Public License v3\r\n";
-            About += string.Format("Version: \t{0}\r\n", Program.mVersion);
             About += "\r\n";
             About += "Source: \thttps://github.com/DavidXanatos/wumgr\r\n";
-            About += "\r\n";
-            About += "Icons from: https://icons8.com/";
+            About += "Support: \thttps://www.patreon.com/DavidXanatos\r\n";
             MessageBox.Show(About, Program.mName);
         }
 
         private void menuWuAu_Click(object Sender, EventArgs e)
         {
-            wuauMenu.Checked = !wuauMenu.Checked;
-            if (wuauMenu.Checked)
+            mWuAuChecked = !mWuAuChecked;
+            CheckMenuItem(mToolsMenuHandle, MYMENU_WUAU, MF_BYCOMMAND | (mWuAuChecked ? MF_CHECKED : MF_UNCHECKED));
+            if (mWuAuChecked)
             {
                 agent.EnableWuAuServ(true);
                 agent.Init();
@@ -786,9 +910,10 @@ namespace wumgr
         {
             IntPtr MenuHandle = GetSystemMenu(this.Handle, false); // Note: to restore default set true
             RemoveMenu(MenuHandle, 6, MF_BYPOSITION);
-            mToolsMenu.MenuItems.Clear();
+            DestroyMenu(mToolsMenuHandle);
+            mToolsMenuHandle = CreatePopupMenu();
             BuildToolsMenu();
-            InsertMenu(MenuHandle, 6, MF_BYPOSITION | MF_POPUP, (int)mToolsMenu.Handle, Translate.fmt("menu_tools"));
+            InsertMenuPopup(MenuHandle, 6, MF_BYPOSITION | MF_POPUP, mToolsMenuHandle, Translate.fmt("menu_tools"));
         }
 
         private void btnWinUpd_CheckedChanged(object sender, EventArgs e)
@@ -1144,6 +1269,23 @@ namespace wumgr
             if (mSuspendUpdate)
                 return;
 
+            if (chkBlockMS.Checked)
+            {
+                var result = MessageBox.Show(
+                    "Blocking access to Windows Update servers will prevent this app from checking for updates.\n\n" +
+                    "Once enabled, disabling this option may require restarting the Windows Update service or rebooting before searches work again.\n\n" +
+                    "Are you sure?",
+                    Program.mName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                if (result == DialogResult.No)
+                {
+                    mSuspendUpdate = true;
+                    chkBlockMS.Checked = false;
+                    mSuspendUpdate = false;
+                    return;
+                }
+            }
+
             if (radDisable.Checked && mGPORespect == GPO.Respect.Partial)
             {
                 if (chkBlockMS.Checked)
@@ -1246,6 +1388,29 @@ namespace wumgr
         {
             UpdateState();
             SetConfig("Manual", chkManual.Checked ? "1" : "0");
+        }
+
+        private void chkPipeFullCtrl_CheckedChanged(object sender, EventArgs e)
+        {
+            if (mSuspendUpdate)
+                return;
+            SetConfig("PipeFullControl", chkPipeFullCtrl.Checked ? "1" : "0");
+        }
+
+        private void dlColorMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (mSuspendUpdate) return;
+            string[] modes = { "system", "classic", "dark" };
+            string mode = modes[dlColorMode.SelectedIndex];
+            SetConfig("ColorMode", mode);
+            bool dark = mode.Equals("dark");
+            if (dark)
+                Application.SetColorMode(SystemColorMode.Dark);
+            else if (mode.Equals("classic"))
+                Application.SetColorMode(SystemColorMode.Classic);
+            else
+                Application.SetColorMode(SystemColorMode.System);
+            ApplyControlTheme(this, dark);
         }
         
         private void chkHideWU_CheckedChanged(object sender, EventArgs e)
@@ -1369,6 +1534,8 @@ namespace wumgr
             toolTip.SetToolTip(btnGetLink, Translate.fmt("tip_lnk"));
             toolTip.SetToolTip(btnUnInstall, Translate.fmt("tip_rem"));
             toolTip.SetToolTip(btnCancel, Translate.fmt("tip_cancel"));
+            toolTip.SetToolTip(chkManual, "Downloads installers and runs them directly. Not compatible with complex installers (e.g. Visual Studio). Use standard mode for those.");
+            toolTip.SetToolTip(chkBlockMS, "Warning: Blocks ALL connections to Windows Update servers,\nincluding searches from this app. Disable before checking for updates.");
 
             updateView.Columns[0].Text = Translate.fmt("col_title");
             updateView.Columns[1].Text = Translate.fmt("col_cat");
@@ -1392,6 +1559,7 @@ namespace wumgr
             chkOffline.Text = Translate.fmt("lbl_off");
             chkDownload.Text = Translate.fmt("lbl_dl");
             chkManual.Text = Translate.fmt("lbl_man");
+            chkPipeFullCtrl.Text = "IPC Pipe Full Control (not recommended)";
             chkOld.Text = Translate.fmt("lbl_old");
             chkMsUpd.Text = Translate.fmt("lbl_ms");
 

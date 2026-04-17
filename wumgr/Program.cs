@@ -161,11 +161,22 @@ namespace wumgr
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            string colorMode = IniReadValue("Options", "ColorMode", "system");
+            if (colorMode.Equals("dark", StringComparison.OrdinalIgnoreCase))
+                Application.SetColorMode(SystemColorMode.Dark);
+            else if (colorMode.Equals("classic", StringComparison.OrdinalIgnoreCase))
+                Application.SetColorMode(SystemColorMode.Classic);
+            else
+                Application.SetColorMode(SystemColorMode.System);
+
             Application.Run(new WuMgr());
 
             Agent.UnInit();
 
             ExecOnClose();
+
+            Environment.Exit(0);
         }
 
         static private void ExecOnStart()
@@ -374,9 +385,10 @@ namespace wumgr
                         if (!FileOps.TakeOwn(exePath))
                             return false;
 
-                        FileSecurity ac = File.GetAccessControl(exePath);
+                        FileInfo exeInfo = new FileInfo(exePath);
+                        FileSecurity ac = exeInfo.GetAccessControl();
                         ac.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(FileOps.SID_Worls), FileSystemRights.ReadAndExecute, AccessControlType.Allow));
-                        File.SetAccessControl(exePath, ac);
+                        exeInfo.SetAccessControl(ac);
                     }
                 }
                 else

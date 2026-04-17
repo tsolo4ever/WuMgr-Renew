@@ -1,4 +1,4 @@
-﻿namespace wumgr
+namespace wumgr
 {
     partial class WuMgr
     {
@@ -78,6 +78,9 @@
             this.chkMsUpd = new System.Windows.Forms.CheckBox();
             this.chkOld = new System.Windows.Forms.CheckBox();
             this.chkManual = new System.Windows.Forms.CheckBox();
+            this.chkPipeFullCtrl = new System.Windows.Forms.CheckBox();
+            this.lblColorMode = new System.Windows.Forms.Label();
+            this.dlColorMode = new System.Windows.Forms.ComboBox();
             this.chkDownload = new System.Windows.Forms.CheckBox();
             this.tabAU = new System.Windows.Forms.TabPage();
             this.label1 = new System.Windows.Forms.Label();
@@ -118,7 +121,7 @@
             this.chkAutoRun.Text = "Run in background";
             this.chkAutoRun.ThreeState = true;
             this.toolTip.SetToolTip(this.chkAutoRun, "Auto Start with Windows");
-            this.chkAutoRun.UseVisualStyleBackColor = true;
+            this.chkAutoRun.UseVisualStyleBackColor = false;
             this.chkAutoRun.CheckedChanged += new System.EventHandler(this.chkAutoRun_CheckedChanged);
             // 
             // notifyIcon
@@ -126,7 +129,7 @@
             this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("notifyIcon.Icon")));
             this.notifyIcon.Text = "notifyIcon1";
             this.notifyIcon.BalloonTipClicked += new System.EventHandler(this.notifyIcon_BalloonTipClicked);
-            this.notifyIcon.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.notifyIcon1_MouseDoubleClick);
+            this.notifyIcon.MouseClick += new System.Windows.Forms.MouseEventHandler(this.notifyIcon_MouseClick);
             // 
             // panelList
             // 
@@ -196,7 +199,7 @@
             this.chkGrupe.Size = new System.Drawing.Size(98, 17);
             this.chkGrupe.TabIndex = 1;
             this.chkGrupe.Text = "Group Updates";
-            this.chkGrupe.UseVisualStyleBackColor = true;
+            this.chkGrupe.UseVisualStyleBackColor = false;
             this.chkGrupe.CheckedChanged += new System.EventHandler(this.chkGrupe_CheckedChanged);
             // 
             // chkAll
@@ -210,7 +213,7 @@
             this.chkAll.Size = new System.Drawing.Size(70, 17);
             this.chkAll.TabIndex = 2;
             this.chkAll.Text = "Select All";
-            this.chkAll.UseVisualStyleBackColor = true;
+            this.chkAll.UseVisualStyleBackColor = false;
             this.chkAll.CheckedChanged += new System.EventHandler(this.chkAll_CheckedChanged);
             // 
             // lblPatreon
@@ -318,7 +321,7 @@
             this.btnSearchOff.Size = new System.Drawing.Size(19, 19);
             this.btnSearchOff.TabIndex = 0;
             this.btnSearchOff.Text = "X";
-            this.btnSearchOff.UseVisualStyleBackColor = true;
+            this.btnSearchOff.UseVisualStyleBackColor = false;
             this.btnSearchOff.Click += new System.EventHandler(this.btnSearchOff_Click);
             // 
             // txtFilter
@@ -405,7 +408,7 @@
             this.btnSearch.Name = "btnSearch";
             this.btnSearch.Size = new System.Drawing.Size(30, 30);
             this.btnSearch.TabIndex = 0;
-            this.btnSearch.UseVisualStyleBackColor = true;
+            this.btnSearch.UseVisualStyleBackColor = false;
             this.btnSearch.Click += new System.EventHandler(this.btnSearch_Click);
             // 
             // btnDownload
@@ -415,7 +418,7 @@
             this.btnDownload.Name = "btnDownload";
             this.btnDownload.Size = new System.Drawing.Size(30, 30);
             this.btnDownload.TabIndex = 1;
-            this.btnDownload.UseVisualStyleBackColor = true;
+            this.btnDownload.UseVisualStyleBackColor = false;
             this.btnDownload.Click += new System.EventHandler(this.btnDownload_Click);
             // 
             // btnInstall
@@ -425,7 +428,7 @@
             this.btnInstall.Name = "btnInstall";
             this.btnInstall.Size = new System.Drawing.Size(30, 30);
             this.btnInstall.TabIndex = 2;
-            this.btnInstall.UseVisualStyleBackColor = true;
+            this.btnInstall.UseVisualStyleBackColor = false;
             this.btnInstall.Click += new System.EventHandler(this.btnInstall_Click);
             // 
             // btnUnInstall
@@ -435,7 +438,7 @@
             this.btnUnInstall.Name = "btnUnInstall";
             this.btnUnInstall.Size = new System.Drawing.Size(30, 30);
             this.btnUnInstall.TabIndex = 3;
-            this.btnUnInstall.UseVisualStyleBackColor = true;
+            this.btnUnInstall.UseVisualStyleBackColor = false;
             this.btnUnInstall.Click += new System.EventHandler(this.btnUnInstall_Click);
             // 
             // btnHide
@@ -445,7 +448,7 @@
             this.btnHide.Name = "btnHide";
             this.btnHide.Size = new System.Drawing.Size(30, 30);
             this.btnHide.TabIndex = 4;
-            this.btnHide.UseVisualStyleBackColor = true;
+            this.btnHide.UseVisualStyleBackColor = false;
             this.btnHide.Click += new System.EventHandler(this.btnHide_Click);
             // 
             // btnGetLink
@@ -455,7 +458,7 @@
             this.btnGetLink.Name = "btnGetLink";
             this.btnGetLink.Size = new System.Drawing.Size(30, 30);
             this.btnGetLink.TabIndex = 5;
-            this.btnGetLink.UseVisualStyleBackColor = true;
+            this.btnGetLink.UseVisualStyleBackColor = false;
             this.btnGetLink.Click += new System.EventHandler(this.btnGetLink_Click);
             // 
             // tableLayoutPanel5
@@ -484,7 +487,7 @@
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(29, 29);
             this.btnCancel.TabIndex = 0;
-            this.btnCancel.UseVisualStyleBackColor = true;
+            this.btnCancel.UseVisualStyleBackColor = false;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
             // progTotal
@@ -507,7 +510,7 @@
             this.btnHistory.Size = new System.Drawing.Size(180, 23);
             this.btnHistory.TabIndex = 6;
             this.btnHistory.Text = "Update History";
-            this.btnHistory.UseVisualStyleBackColor = true;
+            this.btnHistory.UseVisualStyleBackColor = false;
             this.btnHistory.CheckedChanged += new System.EventHandler(this.btnHistory_CheckedChanged);
             // 
             // btnHidden
@@ -521,7 +524,7 @@
             this.btnHidden.Size = new System.Drawing.Size(180, 23);
             this.btnHidden.TabIndex = 7;
             this.btnHidden.Text = "Hidden Updates";
-            this.btnHidden.UseVisualStyleBackColor = true;
+            this.btnHidden.UseVisualStyleBackColor = false;
             this.btnHidden.CheckedChanged += new System.EventHandler(this.btnHidden_CheckedChanged);
             // 
             // btnInstalled
@@ -535,7 +538,7 @@
             this.btnInstalled.Size = new System.Drawing.Size(180, 23);
             this.btnInstalled.TabIndex = 8;
             this.btnInstalled.Text = "Installed Updates";
-            this.btnInstalled.UseVisualStyleBackColor = true;
+            this.btnInstalled.UseVisualStyleBackColor = false;
             this.btnInstalled.CheckedChanged += new System.EventHandler(this.btnInstalled_CheckedChanged);
             // 
             // btnWinUpd
@@ -549,7 +552,7 @@
             this.btnWinUpd.Size = new System.Drawing.Size(180, 23);
             this.btnWinUpd.TabIndex = 0;
             this.btnWinUpd.Text = "Windows Updates";
-            this.btnWinUpd.UseVisualStyleBackColor = true;
+            this.btnWinUpd.UseVisualStyleBackColor = false;
             this.btnWinUpd.CheckedChanged += new System.EventHandler(this.btnWinUpd_CheckedChanged);
             // 
             // lblStatus
@@ -570,7 +573,7 @@
             this.tabs.Location = new System.Drawing.Point(3, 213);
             this.tabs.Name = "tabs";
             this.tabs.SelectedIndex = 0;
-            this.tabs.Size = new System.Drawing.Size(182, 227);
+            this.tabs.Size = new System.Drawing.Size(182, 231);
             this.tabs.TabIndex = 1;
             // 
             // tabOptions
@@ -581,21 +584,24 @@
             this.tabOptions.Controls.Add(this.chkMsUpd);
             this.tabOptions.Controls.Add(this.chkOld);
             this.tabOptions.Controls.Add(this.chkManual);
+            this.tabOptions.Controls.Add(this.chkPipeFullCtrl);
+            this.tabOptions.Controls.Add(this.lblColorMode);
+            this.tabOptions.Controls.Add(this.dlColorMode);
             this.tabOptions.Controls.Add(this.chkDownload);
             this.tabOptions.Location = new System.Drawing.Point(4, 22);
             this.tabOptions.Name = "tabOptions";
             this.tabOptions.Padding = new System.Windows.Forms.Padding(3);
-            this.tabOptions.Size = new System.Drawing.Size(174, 201);
+            this.tabOptions.Size = new System.Drawing.Size(174, 205);
             this.tabOptions.TabIndex = 0;
             this.tabOptions.Text = "Options";
-            this.tabOptions.UseVisualStyleBackColor = true;
+            this.tabOptions.UseVisualStyleBackColor = false;
             // 
             // gbStartup
             // 
             this.gbStartup.Controls.Add(this.chkAutoRun);
             this.gbStartup.Controls.Add(this.chkNoUAC);
             this.gbStartup.Controls.Add(this.dlAutoCheck);
-            this.gbStartup.Location = new System.Drawing.Point(1, 125);
+            this.gbStartup.Location = new System.Drawing.Point(1, 129);
             this.gbStartup.Name = "gbStartup";
             this.gbStartup.Size = new System.Drawing.Size(170, 75);
             this.gbStartup.TabIndex = 8;
@@ -610,7 +616,7 @@
             this.chkNoUAC.Size = new System.Drawing.Size(154, 17);
             this.chkNoUAC.TabIndex = 1;
             this.chkNoUAC.Text = "Always run as Administrator";
-            this.chkNoUAC.UseVisualStyleBackColor = true;
+            this.chkNoUAC.UseVisualStyleBackColor = false;
             this.chkNoUAC.CheckedChanged += new System.EventHandler(this.chkNoUAC_CheckedChanged);
             // 
             // dlAutoCheck
@@ -650,7 +656,7 @@
             this.chkOffline.Size = new System.Drawing.Size(86, 17);
             this.chkOffline.TabIndex = 1;
             this.chkOffline.Text = "Offline Mode";
-            this.chkOffline.UseVisualStyleBackColor = true;
+            this.chkOffline.UseVisualStyleBackColor = false;
             this.chkOffline.CheckedChanged += new System.EventHandler(this.chkOffline_CheckedChanged);
             // 
             // chkMsUpd
@@ -661,7 +667,7 @@
             this.chkMsUpd.Size = new System.Drawing.Size(149, 17);
             this.chkMsUpd.TabIndex = 0;
             this.chkMsUpd.Text = "Register Microsoft Update";
-            this.chkMsUpd.UseVisualStyleBackColor = true;
+            this.chkMsUpd.UseVisualStyleBackColor = false;
             this.chkMsUpd.CheckedChanged += new System.EventHandler(this.chkMsUpd_CheckedChanged);
             // 
             // chkOld
@@ -672,7 +678,7 @@
             this.chkOld.Size = new System.Drawing.Size(119, 17);
             this.chkOld.TabIndex = 2;
             this.chkOld.Text = "Include superseded";
-            this.chkOld.UseVisualStyleBackColor = true;
+            this.chkOld.UseVisualStyleBackColor = false;
             this.chkOld.CheckedChanged += new System.EventHandler(this.chkOld_CheckedChanged);
             // 
             // chkManual
@@ -683,11 +689,42 @@
             this.chkManual.Size = new System.Drawing.Size(148, 17);
             this.chkManual.TabIndex = 0;
             this.chkManual.Text = "\'Manual\' Download/Install";
-            this.chkManual.UseVisualStyleBackColor = true;
+            this.chkManual.UseVisualStyleBackColor = false;
             this.chkManual.CheckedChanged += new System.EventHandler(this.chkManual_CheckedChanged);
-            // 
+            //
+            // chkPipeFullCtrl
+            //
+            this.chkPipeFullCtrl.AutoSize = true;
+            this.chkPipeFullCtrl.Location = new System.Drawing.Point(4, 109);
+            this.chkPipeFullCtrl.Name = "chkPipeFullCtrl";
+            this.chkPipeFullCtrl.Size = new System.Drawing.Size(165, 17);
+            this.chkPipeFullCtrl.TabIndex = 9;
+            this.chkPipeFullCtrl.Text = "IPC Pipe Full Control (not recommended)";
+            this.chkPipeFullCtrl.UseVisualStyleBackColor = false;
+            this.chkPipeFullCtrl.CheckedChanged += new System.EventHandler(this.chkPipeFullCtrl_CheckedChanged);
+            //
+            // lblColorMode
+            //
+            this.lblColorMode.AutoSize = true;
+            this.lblColorMode.Location = new System.Drawing.Point(4, 132);
+            this.lblColorMode.Name = "lblColorMode";
+            this.lblColorMode.Size = new System.Drawing.Size(70, 13);
+            this.lblColorMode.TabIndex = 10;
+            this.lblColorMode.Text = "Color mode:";
+            //
+            // dlColorMode
+            //
+            this.dlColorMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.dlColorMode.FormattingEnabled = true;
+            this.dlColorMode.Items.AddRange(new object[] { "System default", "Light (classic)", "Dark" });
+            this.dlColorMode.Location = new System.Drawing.Point(80, 129);
+            this.dlColorMode.Name = "dlColorMode";
+            this.dlColorMode.Size = new System.Drawing.Size(130, 21);
+            this.dlColorMode.TabIndex = 11;
+            this.dlColorMode.SelectedIndexChanged += new System.EventHandler(this.dlColorMode_SelectedIndexChanged);
+            //
             // chkDownload
-            // 
+            //
             this.chkDownload.AutoSize = true;
             this.chkDownload.Checked = true;
             this.chkDownload.CheckState = System.Windows.Forms.CheckState.Checked;
@@ -696,7 +733,7 @@
             this.chkDownload.Size = new System.Drawing.Size(145, 17);
             this.chkDownload.TabIndex = 3;
             this.chkDownload.Text = "Download wsusscn2.cab";
-            this.chkDownload.UseVisualStyleBackColor = true;
+            this.chkDownload.UseVisualStyleBackColor = false;
             this.chkDownload.CheckedChanged += new System.EventHandler(this.chkDownload_CheckedChanged);
             // 
             // tabAU
@@ -720,7 +757,7 @@
             this.tabAU.Size = new System.Drawing.Size(174, 201);
             this.tabAU.TabIndex = 1;
             this.tabAU.Text = "Auto Update";
-            this.tabAU.UseVisualStyleBackColor = true;
+            this.tabAU.UseVisualStyleBackColor = false;
             // 
             // label1
             // 
@@ -739,7 +776,7 @@
             this.chkDrivers.TabIndex = 7;
             this.chkDrivers.Text = "Include Drivers";
             this.chkDrivers.ThreeState = true;
-            this.chkDrivers.UseVisualStyleBackColor = true;
+            this.chkDrivers.UseVisualStyleBackColor = false;
             this.chkDrivers.CheckStateChanged += new System.EventHandler(this.chkDrivers_CheckStateChanged);
             // 
             // chkStore
@@ -750,7 +787,7 @@
             this.chkStore.Size = new System.Drawing.Size(152, 17);
             this.chkStore.TabIndex = 21;
             this.chkStore.Text = "Disable Store Auto Update";
-            this.chkStore.UseVisualStyleBackColor = true;
+            this.chkStore.UseVisualStyleBackColor = false;
             this.chkStore.CheckedChanged += new System.EventHandler(this.chkStore_CheckedChanged);
             // 
             // chkHideWU
@@ -761,7 +798,7 @@
             this.chkHideWU.Size = new System.Drawing.Size(139, 17);
             this.chkHideWU.TabIndex = 1;
             this.chkHideWU.Text = "Hide WU Settings Page";
-            this.chkHideWU.UseVisualStyleBackColor = true;
+            this.chkHideWU.UseVisualStyleBackColor = false;
             this.chkHideWU.CheckedChanged += new System.EventHandler(this.chkHideWU_CheckedChanged);
             // 
             // chkDisableAU
@@ -771,7 +808,7 @@
             this.chkDisableAU.Size = new System.Drawing.Size(155, 21);
             this.chkDisableAU.TabIndex = 20;
             this.chkDisableAU.Text = "Disable Update Facilitators";
-            this.chkDisableAU.UseVisualStyleBackColor = true;
+            this.chkDisableAU.UseVisualStyleBackColor = false;
             this.chkDisableAU.CheckedChanged += new System.EventHandler(this.chkDisableAU_CheckedChanged);
             // 
             // radDefault
@@ -783,7 +820,7 @@
             this.radDefault.TabIndex = 19;
             this.radDefault.TabStop = true;
             this.radDefault.Text = "Automatic Update (default)";
-            this.radDefault.UseVisualStyleBackColor = true;
+            this.radDefault.UseVisualStyleBackColor = false;
             this.radDefault.CheckedChanged += new System.EventHandler(this.radGPO_CheckedChanged);
             // 
             // radSchedule
@@ -795,7 +832,7 @@
             this.radSchedule.TabIndex = 18;
             this.radSchedule.TabStop = true;
             this.radSchedule.Text = "Scheduled & Installation";
-            this.radSchedule.UseVisualStyleBackColor = true;
+            this.radSchedule.UseVisualStyleBackColor = false;
             this.radSchedule.CheckedChanged += new System.EventHandler(this.radGPO_CheckedChanged);
             // 
             // radDownload
@@ -807,7 +844,7 @@
             this.radDownload.TabIndex = 17;
             this.radDownload.TabStop = true;
             this.radDownload.Text = "Download Only";
-            this.radDownload.UseVisualStyleBackColor = true;
+            this.radDownload.UseVisualStyleBackColor = false;
             this.radDownload.CheckedChanged += new System.EventHandler(this.radGPO_CheckedChanged);
             // 
             // chkBlockMS
@@ -818,7 +855,7 @@
             this.chkBlockMS.Size = new System.Drawing.Size(164, 17);
             this.chkBlockMS.TabIndex = 4;
             this.chkBlockMS.Text = "Block Access to WU Servers";
-            this.chkBlockMS.UseVisualStyleBackColor = true;
+            this.chkBlockMS.UseVisualStyleBackColor = false;
             this.chkBlockMS.CheckedChanged += new System.EventHandler(this.chkBlockMS_CheckedChanged);
             // 
             // radNotify
@@ -830,7 +867,7 @@
             this.radNotify.TabIndex = 16;
             this.radNotify.TabStop = true;
             this.radNotify.Text = "Notification Only";
-            this.radNotify.UseVisualStyleBackColor = true;
+            this.radNotify.UseVisualStyleBackColor = false;
             this.radNotify.CheckedChanged += new System.EventHandler(this.radGPO_CheckedChanged);
             // 
             // radDisable
@@ -842,7 +879,7 @@
             this.radDisable.TabIndex = 15;
             this.radDisable.TabStop = true;
             this.radDisable.Text = "Disable Automatic Update";
-            this.radDisable.UseVisualStyleBackColor = true;
+            this.radDisable.UseVisualStyleBackColor = false;
             this.radDisable.CheckedChanged += new System.EventHandler(this.radGPO_CheckedChanged);
             // 
             // dlShDay
@@ -985,6 +1022,9 @@
         private System.Windows.Forms.CheckBox chkOffline;
         private System.Windows.Forms.CheckBox chkDownload;
         private System.Windows.Forms.CheckBox chkManual;
+        private System.Windows.Forms.CheckBox chkPipeFullCtrl;
+        private System.Windows.Forms.Label lblColorMode;
+        private System.Windows.Forms.ComboBox dlColorMode;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.RichTextBox logBox;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel7;
