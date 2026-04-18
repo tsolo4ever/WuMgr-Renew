@@ -28,7 +28,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO + @"\AU", true);
+                using var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO + @"\AU", true);
                 switch (option)
                 {
                     case AUOptions.Default: //Automatic(default)
@@ -76,7 +76,7 @@ namespace wumgr
             AUOptions option = AUOptions.Default;
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO + @"\AU", false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO + @"\AU", false);
                 object value_no = subKey == null ? null : subKey.GetValue("NoAutoUpdate");
                 if (value_no == null || (int)value_no == 0)
                 {
@@ -95,9 +95,9 @@ namespace wumgr
                     option = AUOptions.Disabled;
                 }
 
-                object value_day = subKey.GetValue("ScheduledInstallDay");
+                object value_day = subKey == null ? null : subKey.GetValue("ScheduledInstallDay");
                 day = value_day != null ? (int)value_day : 0;
-                object value_time = subKey.GetValue("ScheduledInstallTime");
+                object value_time = subKey == null ? null : subKey.GetValue("ScheduledInstallTime");
                 time = value_time != null ? (int)value_time : 0;
             }
             catch { day = 0; time = 0; }
@@ -108,7 +108,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO, true);
+                using var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO, true);
                 switch (option)
                 {
                     case 0: // CheckState.Unchecked:
@@ -129,7 +129,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO, false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO, false);
                 object value_drv = subKey == null ? null : subKey.GetValue("ExcludeWUDriversInQualityUpdate");
 
                 if (value_drv == null)
@@ -147,7 +147,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer", true);
+                using var subKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer", true);
                 if (hide)
                     subKey.SetValue("SettingsPageVisibility", "hide:windowsupdate");
                 else
@@ -160,9 +160,9 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer");
+                using var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer");
                 string value = subKey == null ? null : subKey.GetValue("SettingsPageVisibility", "").ToString();
-                return value.Contains("hide:windowsupdate");
+                return value != null && value.Contains("hide:windowsupdate");
             }
             catch { }
             return false;
@@ -174,25 +174,25 @@ namespace wumgr
             {
                 if (block)
                 {
-                    var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO, true);
+                    using var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO, true);
                     subKey.SetValue("DoNotConnectToWindowsUpdateInternetLocations", 1);
                     subKey.SetValue("WUServer", "\" \"");
                     subKey.SetValue("WUStatusServer", "\" \"");
                     subKey.SetValue("UpdateServiceUrlAlternate", "\" \"");
 
-                    var subKey2 = Registry.LocalMachine.CreateSubKey(mWuGPO + @"\AU", true);
+                    using var subKey2 = Registry.LocalMachine.CreateSubKey(mWuGPO + @"\AU", true);
                     subKey2.SetValue("UseWUServer", 1);
                 }
                 else
                 {
-                    var subKey = Registry.LocalMachine.CreateSubKey(mWuGPO, true);
-                    subKey.DeleteValue("DoNotConnectToWindowsUpdateInternetLocations", false);
-                    subKey.DeleteValue("WUServer", false);
-                    subKey.DeleteValue("WUStatusServer", false);
-                    subKey.DeleteValue("UpdateServiceUrlAlternate", false);
+                    using var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO, true);
+                    subKey?.DeleteValue("DoNotConnectToWindowsUpdateInternetLocations", false);
+                    subKey?.DeleteValue("WUServer", false);
+                    subKey?.DeleteValue("WUStatusServer", false);
+                    subKey?.DeleteValue("UpdateServiceUrlAlternate", false);
 
-                    var subKey2 = Registry.LocalMachine.CreateSubKey(mWuGPO + @"\AU", true);
-                    subKey2.DeleteValue("UseWUServer", false);
+                    using var subKey2 = Registry.LocalMachine.OpenSubKey(mWuGPO + @"\AU", true);
+                    subKey2?.DeleteValue("UseWUServer", false);
                 }
             }
             catch { }
@@ -202,11 +202,11 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO, false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(mWuGPO, false);
 
                 object value_block = subKey == null ? null : subKey.GetValue("DoNotConnectToWindowsUpdateInternetLocations");
 
-                var subKey2 = Registry.LocalMachine.OpenSubKey(mWuGPO + @"\AU", false);
+                using var subKey2 = Registry.LocalMachine.OpenSubKey(mWuGPO + @"\AU", false);
                 object value_wsus = subKey2 == null ? null : subKey2.GetValue("UseWUServer");
 
                 if ((value_block != null && (int)value_block == 1) && (value_wsus != null && (int)value_wsus == 1))
@@ -224,7 +224,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\WindowsStore", true);
+                using var subKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Policies\Microsoft\WindowsStore", true);
                 //var subKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate", true);
                 if (disable)
                     subKey.SetValue("AutoDownload", 2);
@@ -238,7 +238,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\WindowsStore", false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\WindowsStore", false);
                 //var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate");
                 object value_block = subKey == null ? null : subKey.GetValue("AutoDownload");
                 return (value_block != null && (int)value_block == 2);
@@ -267,7 +267,7 @@ namespace wumgr
 
         static public void ConfigSvc(string name, ServiceStartMode mode)
         {
-            ServiceController svc = new ServiceController(name);
+            using var svc = new ServiceController(name);
             bool showErr = false;
             try
             {
@@ -285,9 +285,8 @@ namespace wumgr
                 if(showErr)
                     AppLog.Line("Error Stoping Service: {0}", name);
             }
-            svc.Close();
 
-            var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.SetValue | RegistryRights.ChangePermissions | RegistryRights.TakeOwnership);
+            using var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.SetValue | RegistryRights.ChangePermissions | RegistryRights.TakeOwnership);
             if (subKey == null)
             {
                 AppLog.Line("Service {0} does not exist", name);
@@ -319,7 +318,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, false);
                 return subKey == null || (MiscFunc.parseInt(subKey.GetValue("Start", "-1").ToString()) == (int)ServiceStartMode.Disabled);
             }
             catch { }
@@ -338,7 +337,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", false);
                 if(subKey == null)
                     return Respect.Unknown;
                 //string edition = subKey.GetValue("EditionID", "").ToString();
@@ -364,7 +363,7 @@ namespace wumgr
         {
             try
             {
-                var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", false);
+                using var subKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", false);
                 if (subKey == null)
                     return 0.0f;
                 //string Majorversion = subKey.GetValue("CurrentMajorVersionNumber", "0").ToString(); // this is 10 on 10 but not present on earlier editions
@@ -375,6 +374,7 @@ namespace wumgr
                 /*
                     Operating system              Version number
                     ----------------------------  --------------
+                    Windows 11                      10
                     Windows 10                      6.3 WTF why not 10
                     Windows Server 2016             6.3 WTF why not 10
                     Windows 8.1                     6.3

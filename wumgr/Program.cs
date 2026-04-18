@@ -183,7 +183,7 @@ namespace wumgr
         {
             string ToolsINI = GetToolsPath() +@"\Tools.ini";
 
-            if (int.Parse(IniReadValue("OnStart", "EnableWuAuServ", "0", ToolsINI)) != 0)
+            if (MiscFunc.parseInt(IniReadValue("OnStart", "EnableWuAuServ", "0", ToolsINI)) != 0)
                 Agent.EnableWuAuServ(true);
 
             string OnStart = IniReadValue("OnStart", "Exec", "", ToolsINI);
@@ -199,7 +199,7 @@ namespace wumgr
             if (OnClose.Length > 0)
                 DoExec(PrepExec(OnClose, MiscFunc.parseInt(IniReadValue("OnClose", "Silent", "1", ToolsINI)) != 0), true);
 
-            if (int.Parse(IniReadValue("OnClose", "DisableWuAuServ", "0", ToolsINI)) != 0)
+            if (MiscFunc.parseInt(IniReadValue("OnClose", "DisableWuAuServ", "0", ToolsINI)) != 0)
                 Agent.EnableWuAuServ(false);
 
             // Note: With the UAC bypass the onclose parameter can be used for a local privilege escalation exploit
@@ -207,7 +207,7 @@ namespace wumgr
             {
                 for (int i = 0; i < Program.args.Length; i++)
                 {
-                    if (Program.args[i].Equals("-onclose", StringComparison.CurrentCultureIgnoreCase))
+                    if (Program.args[i].Equals("-onclose", StringComparison.CurrentCultureIgnoreCase) && i + 1 < Program.args.Length)
                         DoExec(PrepExec(Program.args[++i], true));
                 }
             }
@@ -252,7 +252,7 @@ namespace wumgr
         {
             try
             {
-                Process proc = new Process();
+                using Process proc = new Process();
                 proc.StartInfo = startInfo;
                 proc.EnableRaisingEvents = true;
                 proc.Start();
@@ -306,6 +306,8 @@ namespace wumgr
             {
                 if (Program.args[i].Equals(name, StringComparison.CurrentCultureIgnoreCase))
                 {
+                    if (i + 1 >= Program.args.Length)
+                        return "";
                     string temp = Program.args[i + 1];
                     if (temp.Length > 0 && temp[0] != '-')
                         return temp;
@@ -317,7 +319,7 @@ namespace wumgr
 
         public static void AutoStart(bool enable)
         {
-            var subKey = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+            using var subKey = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
             if (enable)
             {
                 string value = "\"" + System.Reflection.Assembly.GetExecutingAssembly().Location + "\"" + " -tray";
@@ -328,8 +330,8 @@ namespace wumgr
         }
 
         public static bool IsAutoStart()
-        { 
-            var subKey = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false);
+        {
+            using var subKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false);
             return (subKey != null && subKey.GetValue("wumgr") != null);
         }
 

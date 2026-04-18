@@ -111,9 +111,9 @@ namespace wumgr
             string product = "";
             foreach (ICategory cat in cats)
             {
-                if (cat.Type.Equals("UpdateClassification"))
+                if ("UpdateClassification".Equals(cat.Type))
                     classification = cat.Name;
-                else if (cat.Type.Equals("Product"))
+                else if ("Product".Equals(cat.Type))
                     product = cat.Name;
                 else
                     continue;

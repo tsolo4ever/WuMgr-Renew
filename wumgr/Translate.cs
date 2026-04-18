@@ -30,6 +30,7 @@ namespace wumgr
             }
             
 
+            mStrings.Clear();
             mStrings.Add("msg_running", "Application is already running.");
             mStrings.Add("msg_admin_req", "The {0} requires Administrator privileges in order to install updates");
             mStrings.Add("msg_ro_wrk_dir", "Can't write to working directory: {0}");
@@ -160,8 +161,8 @@ namespace wumgr
         {
             try
             {
-                string str = id;
-                mStrings.TryGetValue(id, out str);
+                if (!mStrings.TryGetValue(id, out string str))
+                    str = id;
                 return string.Format(str, args);
             }
             catch

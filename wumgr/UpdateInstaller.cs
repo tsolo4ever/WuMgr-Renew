@@ -4,9 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Threading;
 
 namespace wumgr
@@ -76,7 +74,7 @@ namespace wumgr
 
                 if (DoInstall)
                 {
-                    List<string> Files = mAllFiles.GetValues(mUpdates[mCurrentTask].KB);
+                    List<string> Files = mAllFiles?.GetValues(mUpdates[mCurrentTask].KB) ?? new List<string>();
 
                     mThread = new Thread(new ParameterizedThreadStart(RunInstall));
                     mThread.Start(Files);
@@ -140,8 +138,8 @@ namespace wumgr
                         if (!Directory.Exists(path)) // is it already unpacked?
                             ZipFile.ExtractToDirectory(File, path);
 
-                        string supportedExtensions = "*.msu,*.msi,*.cab,*.exe";
-                        var foundFiles = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories).Where(s => supportedExtensions.Contains(Path.GetExtension(s).ToLower()));
+                        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".msu", ".msi", ".cab", ".exe" };
+                        var foundFiles = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories).Where(s => supportedExtensions.Contains(Path.GetExtension(s)));
                         if (foundFiles.Count() == 0)
                             throw new System.IO.FileNotFoundException("Expected file not found in zip");
 
@@ -165,7 +163,7 @@ namespace wumgr
                     else
                         throw new System.IO.FileFormatException("Unknown Update format: " + ext);
 
-                    if (exitCode == 3010 || exitCode == 3010)
+                    if (exitCode == 3010)
                         reboot = true; // reboot requires
                     else if (exitCode == 1641)
                     {
@@ -227,7 +225,7 @@ namespace wumgr
         {
             try
             {
-                Process proc = new Process();
+                using var proc = new Process();
                 proc.StartInfo.FileName = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\Dism.exe");
                 proc.StartInfo.Arguments = "/Online /Get-PackageInfo /PackagePath:\"" + fileName + "\" /English";
                 proc.StartInfo.RedirectStandardOutput = true;
@@ -280,7 +278,7 @@ namespace wumgr
                 startInfo.CreateNoWindow = true;
             }
 
-            Process proc = new Process();
+            using var proc = new Process();
             proc.StartInfo = startInfo;
             proc.EnableRaisingEvents = true;
             proc.Start();
@@ -322,7 +320,7 @@ namespace wumgr
 
                 int exitCode = ExecTask(startInfo);
 
-                if (exitCode == 3010 || exitCode == 3010 || exitCode == 1641)
+                if (exitCode == 3010 || exitCode == 1641)
                 {
                     reboot = true;
                 }

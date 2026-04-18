@@ -1,16 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using WUApiLib;//this is required to use the Interfaces given by microsoft. 
+using WUApiLib;
 using System.Collections;
-using Microsoft.Win32;
-using System.Security.AccessControl;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Diagnostics;
@@ -324,7 +317,7 @@ namespace wumgr
             ToolStripMenuItem tsOpen = new ToolStripMenuItem("Open WuMgr");
             tsOpen.Click += (s, e) => { allowshowdisplay = true; this.Show();
                 if (this.WindowState == FormWindowState.Minimized) this.WindowState = FormWindowState.Normal;
-                SetForegroundWindow(this.Handle.ToInt32()); };
+                SetForegroundWindow(this.Handle); };
             ToolStripMenuItem tsCheck = new ToolStripMenuItem("Check for Updates");
             tsCheck.Click += (s, e) => { allowshowdisplay = true; this.Show(); btnSearch_Click(s, e); };
             ToolStripMenuItem tsAbout = new ToolStripMenuItem(Translate.fmt("menu_about"));
@@ -382,10 +375,62 @@ namespace wumgr
                     rb.BackColor = dark ? s_darkBg : SystemColors.Control;
                     rb.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
                 }
+                else if (ctrl is Button btn)
+                {
+                    btn.FlatStyle = dark ? FlatStyle.Flat : FlatStyle.Standard;
+                    btn.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    btn.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
                 else if (ctrl is GroupBox gb)
                 {
-                    gb.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
                     gb.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    gb.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
+                else if (ctrl is TabPage tp)
+                {
+                    tp.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    tp.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
+                else if (ctrl is TabControl tc)
+                {
+                    tc.BackColor = dark ? s_darkBg : SystemColors.Control;
+                }
+                else if (ctrl is LinkLabel ll)
+                {
+                    ll.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    ll.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                    ll.LinkColor = dark ? Color.FromArgb(100, 180, 255) : SystemColors.HotTrack;
+                    ll.VisitedLinkColor = dark ? Color.FromArgb(180, 120, 255) : Color.Purple;
+                }
+                else if (ctrl is Label lbl)
+                {
+                    lbl.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    lbl.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
+                }
+                else if (ctrl is RichTextBox rtb)
+                {
+                    rtb.BackColor = dark ? s_darkBg : SystemColors.Window;
+                    rtb.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                }
+                else if (ctrl is TextBox tb)
+                {
+                    tb.BackColor = dark ? s_darkBg : SystemColors.Window;
+                    tb.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                }
+                else if (ctrl is ComboBox cb)
+                {
+                    cb.BackColor = dark ? s_darkBg : SystemColors.Window;
+                    cb.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                }
+                else if (ctrl is ListView lv)
+                {
+                    lv.BackColor = dark ? s_darkBg : SystemColors.Window;
+                    lv.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                }
+                else
+                {
+                    ctrl.BackColor = dark ? s_darkBg : SystemColors.Control;
+                    ctrl.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
                 }
 
                 if (ctrl.Controls.Count > 0)
@@ -529,7 +574,7 @@ namespace wumgr
                 this.Show();
                 if (this.WindowState == FormWindowState.Minimized)
                     this.WindowState = FormWindowState.Normal;
-                SetForegroundWindow(this.Handle.ToInt32());
+                SetForegroundWindow(this.Handle);
             }
         }
 
@@ -637,7 +682,7 @@ namespace wumgr
 
                     default:
                         if ((Update.Attributes & (int)MsUpdate.UpdateAttr.Beta) != 0)
-                            State = Translate.fmt("stat_beta" + " ");
+                            State = Translate.fmt("stat_beta") + " ";
 
                         if ((Update.Attributes & (int)MsUpdate.UpdateAttr.Installed) != 0)
                         {
@@ -1134,7 +1179,7 @@ namespace wumgr
                     MessageBox.Show(Translate.fmt("msg_inst_done", agent.dlPath), Program.mName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                else if (ret == WuAgent.RetCodes.DownloadFailed)
+                else if (ret == WuAgent.RetCodes.InstallFailed)
                 {
                     MessageBox.Show(Translate.fmt("msg_inst_err", agent.dlPath), Program.mName, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                     return;
@@ -1467,7 +1512,7 @@ namespace wumgr
         }
 
         [DllImport("User32.dll")]
-        public static extern Int32 SetForegroundWindow(int hWnd);
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
 
         private void notifyIcon_BalloonTipClicked(object sender, EventArgs e)
         {
@@ -1478,7 +1523,7 @@ namespace wumgr
             }
             if(this.WindowState == FormWindowState.Minimized)
                 this.WindowState = FormWindowState.Normal;   
-            SetForegroundWindow(this.Handle.ToInt32());
+            SetForegroundWindow(this.Handle);
         }
 
         private void updateView_ColumnClick(object sender, ColumnClickEventArgs e)

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Threading;
 
 namespace wumgr
@@ -95,6 +94,7 @@ namespace wumgr
 
         void OnProgress(object sender, HttpTask.ProgressEventArgs args)
         {
+            if (mDownloads == null) return;
             Progress?.Invoke(this, new WuAgent.ProgressArgs(mDownloads.Count, mDownloads.Count == 0 ? 0 : (100 * mCurrentTask + args.Percent) / mDownloads.Count, mCurrentTask + 1, args.Percent, mInfo));
         }
 
@@ -112,7 +112,8 @@ namespace wumgr
                         Download.Failed = true;
                 }
 
-                Download.FileName = mCurTask.DlName;
+                if (mCurTask.DlName != null)
+                    Download.FileName = mCurTask.DlName;
                 mDownloads[mCurrentTask] = Download;
                 mCurTask = null;
 

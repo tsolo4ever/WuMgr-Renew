@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using WUApiLib;//this is required to use the Interfaces given by microsoft. 
 using System.Threading;
 using System.Windows.Threading;
@@ -150,7 +148,7 @@ namespace wumgr
         public static string WsUsUID = "3da21691-e39d-4da6-8a4b-b43877bcb1b7"; // Windows Server Update Service
 
         public static string DCatGUID = "8b24b027-1dee-babb-9a95-3517dfb9c552"; // DCat Flighting Prod - Windows Insider Program
-        public static string WinStorGUID = "117cab2d-82b1-4b5a-a08c-4d62dbee7782 "; // Windows Store
+        public static string WinStorGUID = "117cab2d-82b1-4b5a-a08c-4d62dbee7782"; // Windows Store
         public static string WinStorDCat2GUID = "855e8a7c-ecb4-4ca3-b045-1dfa50104289"; // Windows Store (DCat Prod) - Insider Updates for Store Apps
 
         public void EnableService(string GUID, bool enable = true)
@@ -558,7 +556,7 @@ namespace wumgr
                 MultiValueDictionary<string, string> AllFiles = new MultiValueDictionary<string, string>();
                 foreach (UpdateDownloader.Task task in args.Downloads)
                 {
-                    if (task.Failed && task.FileName != null)
+                    if (task.Failed || task.FileName == null)
                         continue;
                     AllFiles.Add(task.KB, task.Path + @"\" + task.FileName);
                 }
@@ -731,52 +729,6 @@ namespace wumgr
             return RetCodes.InProgress;
         }
 
-        // Note: this works _only_ for updates installed from WSUS
-        /*public RetCodes UnInstallUpdates(List<MsUpdate> Updates)
-        {
-            if (mCallback != null)
-                return RetCodes.Busy;
-
-            if (mInstaller == null)
-                mInstaller = mUpdateSession.CreateUpdateInstaller() as IUpdateInstaller;
-
-            mInstaller.Updates = new UpdateCollection();
-            foreach (MsUpdate Update in Updates)
-            {
-                IUpdate update = Update.GetUpdate();
-                if (update == null)
-                    continue;
-
-                if (!update.IsUninstallable)
-                {
-                    AppLog.Line("Update can not be uninstalled: {0}", update.Title);
-                    continue;
-                }
-                mInstaller.Updates.Add(update);
-            }
-            if (mInstaller.Updates.Count == 0)
-            {
-                AppLog.Line("No updates selected or eligible for uninstallation");
-                return RetCodes.NoUpdated;
-            }
-
-            mCurOperation = AgentOperation.RemoveingUpdates;
-            OnProgress(-1, 0, 0, 0);
-
-            mCallback = new UpdateCallback(this);
-
-            AppLog.Line("Removing Updates... This may take several minutes.");
-            try
-            {
-                mInstalationJob = mInstaller.BeginUninstall(mCallback, mCallback, Updates);
-            }
-            catch (Exception err)
-            {
-                return OnWuError(err);
-            }
-            return RetCodes.InProgress;
-        }*/
-
         public bool RemoveFrom(List<MsUpdate> Updates, MsUpdate Update)
         {
             for (int i = 0; i < Updates.Count; i++)
@@ -927,12 +879,17 @@ namespace wumgr
                     InstallationResults = mInstaller.EndInstall(installationJob);
                 else if (mCurOperation == AgentOperation.RemoveingUpdates)
                     InstallationResults = mInstaller.EndUninstall(installationJob);
-                
             }
             catch (Exception err)
             {
                 AppLog.Line("(Un)Installing updates failed");
                 LogError(err);
+                OnFinished(RetCodes.InternalError);
+                return;
+            }
+
+            if (InstallationResults == null)
+            {
                 OnFinished(RetCodes.InternalError);
                 return;
             }
@@ -982,7 +939,7 @@ namespace wumgr
 
         public void EnableWuAuServ(bool enable = true)
         {
-            ServiceController svc = new ServiceController("wuauserv"); // Windows Update Service
+            using var svc = new ServiceController("wuauserv"); // Windows Update Service
             try
             {
                 if (enable)
@@ -1004,15 +961,12 @@ namespace wumgr
             {
                 AppLog.Line("Error: " + err.Message);
             }
-            svc.Close();
         }
 
         public bool TestWuAuServ()
         {
-            ServiceController svc = new ServiceController("wuauserv");
-            bool ret = svc.Status == ServiceControllerStatus.Running;
-            svc.Close();
-            return ret;
+            using var svc = new ServiceController("wuauserv");
+            return svc.Status == ServiceControllerStatus.Running;
         }
 
         public class ProgressArgs : EventArgs
@@ -1135,7 +1089,9 @@ namespace wumgr
                 Update.Size = (decimal)MiscFunc.parseInt(Program.IniReadValue(Update.KB, "Size", "0", INIPath));
 
                 Update.SupportUrl = Program.IniReadValue(Update.KB, "SupportUrl", "", INIPath);
-                Update.Downloads.AddRange(Program.IniReadValue(Update.KB, "Downloads", "", INIPath).Split('|'));
+                string dlValue = Program.IniReadValue(Update.KB, "Downloads", "", INIPath);
+                if (dlValue.Length > 0)
+                    Update.Downloads.AddRange(dlValue.Split('|'));
 
                 Update.State = (MsUpdate.UpdateState)MiscFunc.parseInt(Program.IniReadValue(Update.KB, "State", "0", INIPath));
                 Update.Attributes = MiscFunc.parseInt(Program.IniReadValue(Update.KB, "Attributes", "0", INIPath));
