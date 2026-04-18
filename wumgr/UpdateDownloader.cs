@@ -95,7 +95,7 @@ namespace wumgr
         void OnProgress(object sender, HttpTask.ProgressEventArgs args)
         {
             if (mDownloads == null) return;
-            Progress?.Invoke(this, new WuAgent.ProgressArgs(mDownloads.Count, mDownloads.Count == 0 ? 0 : (100 * mCurrentTask + args.Percent) / mDownloads.Count, mCurrentTask + 1, args.Percent, mInfo));
+            Progress?.Invoke(this, new WuAgent.ProgressArgs(mDownloads.Count, mDownloads.Count == 0 ? 0 : (100 * mCurrentTask + args.Percent) / mDownloads.Count, mCurrentTask + 1, args.Percent, mInfo, args.Speed));
         }
 
         void OnFinished(object sender, HttpTask.FinishedEventArgs args)

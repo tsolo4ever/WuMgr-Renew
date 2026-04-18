@@ -595,7 +595,7 @@ namespace wumgr
 
         void DownloadProgress(object sender, ProgressArgs args)
         {
-            OnProgress(args.TotalCount, args.TotalPercent, args.CurrentIndex, args.CurrentPercent, args.Info);
+            OnProgress(args.TotalCount, args.TotalPercent, args.CurrentIndex, args.CurrentPercent, args.Info, args.Speed);
         }
 
         void InstallFinished(object sender, UpdateInstaller.FinishedEventArgs args) // "manuall" mode
@@ -971,13 +971,14 @@ namespace wumgr
 
         public class ProgressArgs : EventArgs
         {
-            public ProgressArgs(int TotalCount, int TotalPercent, int CurrentIndex, int CurrentPercent, String Info)
+            public ProgressArgs(int TotalCount, int TotalPercent, int CurrentIndex, int CurrentPercent, String Info, long Speed = 0)
             {
                 this.TotalCount = TotalCount;
                 this.TotalPercent = TotalPercent;
                 this.CurrentIndex = CurrentIndex;
                 this.CurrentPercent = CurrentPercent;
                 this.Info = Info;
+                this.Speed = Speed;
             }
 
             public int TotalCount = 0;
@@ -985,13 +986,14 @@ namespace wumgr
             public int CurrentIndex = 0;
             public int CurrentPercent = 0;
             public String Info = "";
+            public long Speed = 0; // bytes per second, 0 = unknown
         }
 
         public event EventHandler<ProgressArgs> Progress;
 
-        protected void OnProgress(int TotalUpdates, int TotalPercent, int CurrentIndex, int UpdatePercent, String Info = "")
+        protected void OnProgress(int TotalUpdates, int TotalPercent, int CurrentIndex, int UpdatePercent, String Info = "", long Speed = 0)
         {
-            Progress?.Invoke(this, new ProgressArgs(TotalUpdates, TotalPercent, CurrentIndex, UpdatePercent, Info));
+            Progress?.Invoke(this, new ProgressArgs(TotalUpdates, TotalPercent, CurrentIndex, UpdatePercent, Info, Speed));
         }
 
         public class FinishedArgs : EventArgs

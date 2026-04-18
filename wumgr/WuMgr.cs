@@ -1116,10 +1116,18 @@ namespace wumgr
                     progTotal.Value = args.TotalPercent;
 
                 if(args.TotalCount > 1)
-                    Status += " " + args.CurrentIndex + "/" + args.TotalCount + " ";
+                    Status += " " + args.CurrentIndex + "/" + args.TotalCount;
 
-                //if (args.UpdatePercent != 0)
-                //    Status += " " + args.UpdatePercent + "%";
+                if (args.CurrentPercent > 0)
+                    Status += " " + args.CurrentPercent + "%";
+
+                if (args.Speed > 0)
+                {
+                    if (args.Speed >= 1024 * 1024)
+                        Status += $" ({args.Speed / (1024.0 * 1024.0):F1} MB/s)";
+                    else
+                        Status += $" ({args.Speed / 1024.0:F0} KB/s)";
+                }
             }
             lblStatus.Text = Status;
             toolTip.SetToolTip(lblStatus, args.Info);

@@ -27,6 +27,7 @@ class HttpTask
     private int mOffset = -1;
     private bool Canceled = false;
     private DateTime lastTime;
+    private DateTime mStartTime;
 
     public string DlPath { get { return mDlPath; } }
     public string DlName { get { return mDlName; } }
@@ -228,6 +229,7 @@ class HttpTask
                 task.streamResponse = task.response.GetResponseStream();
 
                 task.streamWriter = info.OpenWrite();
+                task.mStartTime = DateTime.Now;
 
                 // Begin the Reading of the contents of the HTML page and print it to the console.
                 task.streamResponse.BeginRead(task.BufferRead, 0, BUFFER_SIZE, new AsyncCallback(ReadCallBack), task);
@@ -290,8 +292,10 @@ class HttpTask
                 if (Percent != task.mOldPercent)
                 {
                     task.mOldPercent = Percent;
+                    double elapsed = (DateTime.Now - task.mStartTime).TotalSeconds;
+                    long speed = elapsed > 0.1 ? (long)(task.mOffset / elapsed) : 0;
                     task.mDispatcher.Invoke(new Action(() => {
-                        task.Progress?.Invoke(task, new ProgressEventArgs(Percent));
+                        task.Progress?.Invoke(task, new ProgressEventArgs(Percent, speed));
                     }));
                 }
 
@@ -348,11 +352,13 @@ class HttpTask
 
     public class ProgressEventArgs : EventArgs
     {
-        public ProgressEventArgs(int Percent)
+        public ProgressEventArgs(int Percent, long Speed = 0)
         {
             this.Percent = Percent;
+            this.Speed = Speed;
         }
         public int Percent = 0;
+        public long Speed = 0; // bytes per second
     }
     public event EventHandler<ProgressEventArgs> Progress;
 }
