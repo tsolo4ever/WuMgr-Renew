@@ -11,6 +11,7 @@ using System.Windows.Forms;
 using System.ServiceProcess;
 using System.Collections.Specialized;
 using System.Globalization;
+using System.Text.Json;
 
 namespace wumgr
 {
@@ -77,10 +78,8 @@ namespace wumgr
         {
             if (!LoadServices(true))
                 return false;
-            
-            mUpdateSearcher = mUpdateSession.CreateUpdateSearcher();
 
-            UpdateHistory();
+            mUpdateSearcher = mUpdateSession.CreateUpdateSearcher();
             return true;
         }
 
@@ -194,18 +193,32 @@ namespace wumgr
             return GetServiceName(ID, false);
         }
 
-        public void UpdateHistory()
+        public async System.Threading.Tasks.Task UpdateHistoryAsync()
         {
+            if (mUpdateSearcher == null) return;
+            List<MsUpdate> history = await System.Threading.Tasks.Task.Run(() => {
+                var list = new List<MsUpdate>();
+                try
+                {
+                    int count = mUpdateSearcher.GetTotalHistoryCount();
+                    if (count > 0)
+                    {
+                        foreach (IUpdateHistoryEntry2 update in mUpdateSearcher.QueryHistory(0, count))
+                        {
+                            if (update.Title == null) continue;
+                            list.Add(new MsUpdate(update));
+                        }
+                    }
+                }
+                catch (Exception err)
+                {
+                    AppLog.Line("UpdateHistory error: {0}", err.Message);
+                }
+                return list;
+            });
+
             mUpdateHistory.Clear();
-            int count = mUpdateSearcher.GetTotalHistoryCount();
-            if (count == 0) // sanity check
-                return;
-            foreach (IUpdateHistoryEntry2 update in mUpdateSearcher.QueryHistory(0, count))
-            {
-                if (update.Title == null) // sanity check
-                    continue;
-                mUpdateHistory.Add(new MsUpdate(update));
-            }
+            mUpdateHistory.AddRange(history);
         }
 
         public enum RetCodes
@@ -1028,90 +1041,176 @@ namespace wumgr
 
         protected void OnUpdatesChanged(bool found = false)
         {
-            string INIPath = dlPath + @"\updates.ini";
-            FileOps.DeleteFile(INIPath);
-
-            StoreUpdates(mUpdateHistory);
-            StoreUpdates(mPendingUpdates);
-            StoreUpdates(mInstalledUpdates);
-            StoreUpdates(mHiddenUpdates);
-            
+            StoreUpdates();
             UpdatesChaged?.Invoke(this, new UpdatesArgs(found));
         }
 
-        private void StoreUpdates(List<MsUpdate> Updates)
+        private class CachedUpdate
         {
-            string INIPath = dlPath + @"\updates.ini";
-            foreach (MsUpdate Update in Updates)
+            public string KB { get; set; } = "";
+            public string UUID { get; set; } = "";
+            public string Title { get; set; } = "";
+            public string Description { get; set; } = "";
+            public string Category { get; set; } = "";
+            public DateTime Date { get; set; } = DateTime.MinValue;
+            public decimal Size { get; set; } = 0;
+            public string SupportUrl { get; set; } = "";
+            public string ApplicationID { get; set; } = "";
+            public List<string> Downloads { get; set; } = new List<string>();
+            public int State { get; set; } = 0;
+            public int Attributes { get; set; } = 0;
+            public int ResultCode { get; set; } = 0;
+            public int HResult { get; set; } = 0;
+        }
+
+        private static readonly JsonSerializerOptions sJsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        private static readonly SemaphoreSlim sStoreLock = new SemaphoreSlim(1, 1);
+
+        private void StoreUpdates()
+        {
+            // Snapshot list data on the UI thread — no COM or mutable state crosses into the background task
+            var all = mUpdateHistory.Concat(mPendingUpdates).Concat(mInstalledUpdates).Concat(mHiddenUpdates);
+            var snapshot = all.Where(u => u.KB.Length > 0).Select(u => new CachedUpdate
             {
-                if (Update.KB.Length == 0) // sanity check
-                    continue;
+                KB            = u.KB,
+                UUID          = u.UUID,
+                Title         = u.Title,
+                Description   = u.Description,
+                Category      = u.Category,
+                Date          = u.Date,
+                Size          = u.Size,
+                SupportUrl    = u.SupportUrl,
+                ApplicationID = u.ApplicationID,
+                Downloads     = u.Downloads.Cast<string>().ToList(),
+                State         = (int)u.State,
+                Attributes    = u.Attributes,
+                ResultCode    = u.ResultCode,
+                HResult       = u.HResult
+            }).ToList();
 
-                Program.IniWriteValue(Update.KB, "UUID", Update.UUID, INIPath);
+            string jsonPath = Path.Combine(dlPath, "updates.json");
+            string tmpPath  = jsonPath + ".tmp";
+            string iniPath  = Path.Combine(dlPath, "updates.ini");
 
-                Program.IniWriteValue(Update.KB, "Title", Update.Title, INIPath);
-                Program.IniWriteValue(Update.KB, "Info", Update.Description, INIPath);
-                Program.IniWriteValue(Update.KB, "Category", Update.Category, INIPath);
-
-                Program.IniWriteValue(Update.KB, "Date", Update.Date.ToString(CultureInfo.CurrentUICulture.DateTimeFormat.ShortDatePattern), INIPath);
-                Program.IniWriteValue(Update.KB, "Size", Update.Size.ToString(), INIPath);
-
-                Program.IniWriteValue(Update.KB, "SupportUrl", Update.SupportUrl, INIPath);
-
-                Program.IniWriteValue(Update.KB, "Downloads", string.Join("|",Update.Downloads.Cast<string>().ToArray<string>()), INIPath);
-
-                Program.IniWriteValue(Update.KB, "State", ((int)Update.State).ToString(), INIPath);
-                Program.IniWriteValue(Update.KB, "Attributes", Update.Attributes.ToString(), INIPath);
-                Program.IniWriteValue(Update.KB, "ResultCode", Update.ResultCode.ToString(), INIPath);
-                Program.IniWriteValue(Update.KB, "HResult", Update.HResult.ToString(), INIPath);
-            }
+            System.Threading.Tasks.Task.Run(async () => {
+                await sStoreLock.WaitAsync();
+                try
+                {
+                    File.WriteAllText(tmpPath, JsonSerializer.Serialize(snapshot, sJsonOptions));
+                    File.Move(tmpPath, jsonPath, overwrite: true);
+                    FileOps.DeleteFile(iniPath);
+                }
+                catch (Exception e)
+                {
+                    AppLog.Line("Failed to save update cache: {0}", e.Message);
+                    try { File.Delete(tmpPath); } catch { }
+                }
+                finally
+                {
+                    sStoreLock.Release();
+                }
+            });
         }
 
         private void LoadUpdates()
         {
-            string INIPath = dlPath + @"\updates.ini";
-            foreach (string KB in Program.IniEnumSections(INIPath))
+            string jsonPath = Path.Combine(dlPath, "updates.json");
+            string iniPath  = Path.Combine(dlPath, "updates.ini");
+
+            if (File.Exists(jsonPath))
             {
-                if (KB.Length == 0)
-                    continue;
+                LoadUpdatesFromJson(jsonPath);
+            }
+            else if (File.Exists(iniPath))
+            {
+                AppLog.Line("Migrating update cache from INI to JSON");
+                LoadUpdatesFromIni(iniPath);
+                StoreUpdates(); // write JSON and delete INI
+            }
+        }
 
-                MsUpdate Update = new MsUpdate();
-                Update.KB = KB;
-                Update.UUID = Program.IniReadValue(Update.KB, "UUID", "", INIPath);
+        private void LoadUpdatesFromJson(string jsonPath)
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<List<CachedUpdate>>(File.ReadAllText(jsonPath));
+                if (list == null) return;
+                foreach (var cached in list)
+                    AddCachedUpdate(cached);
+            }
+            catch (Exception e)
+            {
+                AppLog.Line("Failed to load update cache: {0}", e.Message);
+            }
+        }
 
-                Update.Title = Program.IniReadValue(Update.KB, "Title", "", INIPath);
-                Update.Description = Program.IniReadValue(Update.KB, "Info", "", INIPath);
-                Update.Category = Program.IniReadValue(Update.KB, "Category", "", INIPath);
+        private void LoadUpdatesFromIni(string iniPath)
+        {
+            foreach (string KB in Program.IniEnumSections(iniPath))
+            {
+                if (KB.Length == 0) continue;
+                var cached = new CachedUpdate { KB = KB };
+                cached.UUID        = Program.IniReadValue(KB, "UUID",       "", iniPath);
+                cached.Title       = Program.IniReadValue(KB, "Title",      "", iniPath);
+                cached.Description = Program.IniReadValue(KB, "Info",       "", iniPath);
+                cached.Category    = Program.IniReadValue(KB, "Category",   "", iniPath);
+                if (DateTime.TryParse(Program.IniReadValue(KB, "Date", "", iniPath), out DateTime dt))
+                    cached.Date = dt;
+                cached.Size        = (decimal)MiscFunc.parseInt(Program.IniReadValue(KB, "Size",       "0", iniPath));
+                cached.SupportUrl  = Program.IniReadValue(KB, "SupportUrl", "", iniPath);
+                cached.State       = MiscFunc.parseInt(Program.IniReadValue(KB, "State",      "0", iniPath));
+                cached.Attributes  = MiscFunc.parseInt(Program.IniReadValue(KB, "Attributes", "0", iniPath));
+                cached.ResultCode  = MiscFunc.parseInt(Program.IniReadValue(KB, "ResultCode", "0", iniPath));
+                cached.HResult     = MiscFunc.parseInt(Program.IniReadValue(KB, "HResult",    "0", iniPath));
 
-                try { Update.Date = DateTime.Parse(Program.IniReadValue(Update.KB, "Date", "", INIPath)); } catch { }
-                Update.Size = (decimal)MiscFunc.parseInt(Program.IniReadValue(Update.KB, "Size", "0", INIPath));
-
-                Update.SupportUrl = Program.IniReadValue(Update.KB, "SupportUrl", "", INIPath);
-                string dlValue = Program.IniReadValue(Update.KB, "Downloads", "", INIPath);
+                string dlValue = Program.IniReadValue(KB, "Downloads", "", iniPath);
                 if (dlValue.Length > 0)
                 {
                     foreach (string u in dlValue.Split('|'))
                     {
                         if (Uri.TryCreate(u, UriKind.Absolute, out Uri uri) &&
                             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-                            Update.Downloads.Add(u);
-                        else
-                            AppLog.Line("Skipping invalid download URL from cache: {0}", u);
+                            cached.Downloads.Add(u);
                     }
                 }
+                AddCachedUpdate(cached);
+            }
+        }
 
-                Update.State = (MsUpdate.UpdateState)MiscFunc.parseInt(Program.IniReadValue(Update.KB, "State", "0", INIPath));
-                Update.Attributes = MiscFunc.parseInt(Program.IniReadValue(Update.KB, "Attributes", "0", INIPath));
-                Update.ResultCode = MiscFunc.parseInt(Program.IniReadValue(Update.KB, "ResultCode", "0", INIPath));
-                Update.HResult = MiscFunc.parseInt(Program.IniReadValue(Update.KB, "HResult", "0", INIPath));
+        private void AddCachedUpdate(CachedUpdate cached)
+        {
+            MsUpdate Update = new MsUpdate
+            {
+                KB           = cached.KB,
+                UUID         = cached.UUID,
+                Title        = cached.Title,
+                Description  = cached.Description,
+                Category     = cached.Category,
+                Date         = cached.Date,
+                Size         = cached.Size,
+                SupportUrl   = cached.SupportUrl,
+                ApplicationID = cached.ApplicationID,
+                Attributes   = cached.Attributes,
+                ResultCode   = cached.ResultCode,
+                HResult      = cached.HResult,
+                State        = (MsUpdate.UpdateState)cached.State
+            };
 
-                switch (Update.State)
-                {
-                    case MsUpdate.UpdateState.Pending: mPendingUpdates.Add(Update); break;
-                    case MsUpdate.UpdateState.Installed: mInstalledUpdates.Add(Update); break;
-                    case MsUpdate.UpdateState.Hidden: mHiddenUpdates.Add(Update); break;
-                    case MsUpdate.UpdateState.History: mUpdateHistory.Add(Update); break;
-                }
+            foreach (string u in cached.Downloads)
+            {
+                if (Uri.TryCreate(u, UriKind.Absolute, out Uri uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                    Update.Downloads.Add(u);
+                else
+                    AppLog.Line("Skipping invalid download URL from cache: {0}", u);
+            }
+
+            switch (Update.State)
+            {
+                case MsUpdate.UpdateState.Pending:   mPendingUpdates.Add(Update);   break;
+                case MsUpdate.UpdateState.Installed: mInstalledUpdates.Add(Update); break;
+                case MsUpdate.UpdateState.Hidden:    mHiddenUpdates.Add(Update);    break;
+                case MsUpdate.UpdateState.History:   mUpdateHistory.Add(Update);    break;
             }
         }
 

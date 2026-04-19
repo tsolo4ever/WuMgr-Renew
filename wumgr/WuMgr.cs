@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.IO;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading.Tasks;
 
 namespace wumgr
 {
@@ -99,6 +100,21 @@ namespace wumgr
         private Icon mTrayIconSecurity = null;
 
         private enum TrayPriority { None, Driver, NonCritical, Security }
+
+        // WiFi connect-for-updates state
+        private bool mWifiConnectedByUs = false;
+        private ComboBox dlWifiProfile = null;
+        private CheckBox chkWifiConnect = null;
+        private CheckBox chkWifiDisconnect = null;
+        private Button btnWifiNow = null;
+        private Label lblWifiStatus = null;
+
+        // Reboot-required blink state
+        private bool mRebootRequired = false;
+        private bool mBlinkState = false;
+        private System.Windows.Forms.Timer mBlinkTimer = null;
+        private ToolStripMenuItem tsReboot = null;
+        private ToolStripSeparator tsRebootSep = null;
         float mWinVersion = 0.0f;
 
         enum AutoUpdateOptions
@@ -313,6 +329,23 @@ namespace wumgr
 
             // NotifyIcon.ContextMenu removed in .NET 10; use ContextMenuStrip
             ContextMenuStrip trayMenu = new ContextMenuStrip();
+            tsReboot = new ToolStripMenuItem("Restart Now");
+            tsReboot.Font = new System.Drawing.Font(tsReboot.Font, System.Drawing.FontStyle.Bold);
+            tsReboot.Click += (s, e) => {
+                if (MessageBox.Show("Restart now to finish installing updates?", Program.mName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    var psi = new ProcessStartInfo("shutdown.exe");
+                    psi.ArgumentList.Add("/r");
+                    psi.ArgumentList.Add("/t");
+                    psi.ArgumentList.Add("0");
+                    psi.UseShellExecute = false;
+                    psi.CreateNoWindow = true;
+                    try { Process.Start(psi); } catch { }
+                }
+            };
+            tsReboot.Visible = false;
+            tsRebootSep = new ToolStripSeparator();
+            tsRebootSep.Visible = false;
             ToolStripMenuItem tsOpen = new ToolStripMenuItem("Open WuMgr");
             tsOpen.Click += (s, e) => { allowshowdisplay = true; this.Show();
                 if (this.WindowState == FormWindowState.Minimized) this.WindowState = FormWindowState.Normal;
@@ -324,8 +357,14 @@ namespace wumgr
             ToolStripMenuItem tsExit = new ToolStripMenuItem(Translate.fmt("menu_exit"));
             tsExit.Click += menuExit_Click;
             trayMenu.Items.AddRange(new ToolStripItem[] {
-                tsOpen, tsCheck, new ToolStripSeparator(), tsAbout, new ToolStripSeparator(), tsExit });
+                tsReboot, tsRebootSep, tsOpen, tsCheck, new ToolStripSeparator(), tsAbout, new ToolStripSeparator(), tsExit });
             notifyIcon.ContextMenuStrip = trayMenu;
+
+            mBlinkTimer = new System.Windows.Forms.Timer();
+            mBlinkTimer.Interval = 600;
+            mBlinkTimer.Tick += BlinkTick;
+
+            BuildWifiTab();
 
             IntPtr MenuHandle = GetSystemMenu(this.Handle, false); // Note: to restore default set true
             InsertMenu(MenuHandle, 5, MF_BYPOSITION | MF_SEPARATOR, 0, string.Empty);
@@ -346,10 +385,18 @@ namespace wumgr
             Program.ipc.PipeMessage += new PipeIPC.DelegateMessage(PipesMessageHandler);
             Program.ipc.Listen();
 
-            // Apply dark visual styles after all handles are created
-            this.Shown += (s, e) => {
-                if (GetConfig("ColorMode", "system").Equals("dark", StringComparison.OrdinalIgnoreCase))
-                    ApplyControlTheme(this, true);
+            // Apply dark visual styles after all handles are created; load history off the UI thread
+            this.Shown += async (s, e) => {
+                try
+                {
+                    if (GetConfig("ColorMode", "system").Equals("dark", StringComparison.OrdinalIgnoreCase))
+                        ApplyControlTheme(this, true);
+                    await agent.UpdateHistoryAsync();
+                    UpdateCounts();
+                    if (CurrentList == UpdateLists.UpdateHistory)
+                        LoadList();
+                }
+                catch (Exception ex) { AppLog.Line("Startup load error: {0}", ex.Message); }
             };
         }
 
@@ -636,6 +683,164 @@ namespace wumgr
                 case TrayPriority.Driver:      notifyIcon.Icon = mTrayIconDriver;      break;
                 default:                       notifyIcon.Icon = mTrayIconNone;        break;
             }
+        }
+
+        private void BlinkTick(object sender, EventArgs e)
+        {
+            if (mTrayIconNone == null) return;
+            mBlinkState = !mBlinkState;
+            notifyIcon.Icon = mBlinkState ? mTrayIconNone : GetPriorityIcon();
+        }
+
+        private Icon GetPriorityIcon()
+        {
+            return GetUpdatePriority() switch
+            {
+                TrayPriority.Security    => mTrayIconSecurity,
+                TrayPriority.NonCritical => mTrayIconNonCritical,
+                TrayPriority.Driver      => mTrayIconDriver,
+                _                        => mTrayIconNone
+            };
+        }
+
+        private void SetRebootRequired(bool required)
+        {
+            mRebootRequired = required;
+            if (tsReboot != null)
+            {
+                tsReboot.Visible = required;
+                tsRebootSep.Visible = required;
+            }
+            if (required)
+                mBlinkTimer?.Start();
+            else
+            {
+                mBlinkTimer?.Stop();
+                mBlinkState = false;
+                UpdateTrayIcon();
+            }
+        }
+
+        private void BuildWifiTab()
+        {
+            var tabWifi = new TabPage("WiFi");
+            tabWifi.UseVisualStyleBackColor = false;
+
+            var gb = new GroupBox { Text = "WiFi for Updates", Location = new System.Drawing.Point(3, 3), Size = new System.Drawing.Size(165, 175) };
+
+            var lblProfile = new Label { Text = "Profile:", AutoSize = true, Location = new System.Drawing.Point(6, 20) };
+
+            dlWifiProfile = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(6, 35), Size = new System.Drawing.Size(128, 21) };
+
+            var btnRefresh = new Button { Text = "↻", Location = new System.Drawing.Point(136, 34), Size = new System.Drawing.Size(24, 23) };
+            btnRefresh.Click += (s, e) => RefreshWifiProfiles();
+
+            chkWifiConnect = new CheckBox { Text = "Connect before check", AutoSize = true, Location = new System.Drawing.Point(6, 64), UseVisualStyleBackColor = false };
+            chkWifiConnect.CheckedChanged += (s, e) => Program.IniWriteValue("WiFi", "AutoConnect", chkWifiConnect.Checked ? "1" : "0");
+
+            chkWifiDisconnect = new CheckBox { Text = "Disconnect after download", AutoSize = true, Location = new System.Drawing.Point(6, 84), UseVisualStyleBackColor = false };
+            chkWifiDisconnect.CheckedChanged += (s, e) => Program.IniWriteValue("WiFi", "AutoDisconnect", chkWifiDisconnect.Checked ? "1" : "0");
+
+            btnWifiNow = new Button { Text = "Connect Now", Location = new System.Drawing.Point(6, 108), Size = new System.Drawing.Size(153, 25) };
+            btnWifiNow.Click += BtnWifiNow_Click;
+
+            lblWifiStatus = new Label { Text = "", AutoSize = true, Location = new System.Drawing.Point(6, 140) };
+
+            gb.Controls.AddRange(new Control[] { lblProfile, dlWifiProfile, btnRefresh, chkWifiConnect, chkWifiDisconnect, btnWifiNow, lblWifiStatus });
+            tabWifi.Controls.Add(gb);
+            tabs.TabPages.Add(tabWifi);
+
+            // Restore saved settings
+            chkWifiConnect.Checked    = MiscFunc.parseInt(Program.IniReadValue("WiFi", "AutoConnect",    "0")) != 0;
+            chkWifiDisconnect.Checked = MiscFunc.parseInt(Program.IniReadValue("WiFi", "AutoDisconnect", "1")) != 0;
+            string savedProfile = Program.IniReadValue("WiFi", "Profile", "");
+
+            RefreshWifiProfiles();
+
+            if (savedProfile.Length > 0 && dlWifiProfile.Items.Contains(savedProfile))
+                dlWifiProfile.SelectedItem = savedProfile;
+
+            dlWifiProfile.SelectedIndexChanged += (s, e) => {
+                if (dlWifiProfile.SelectedItem != null)
+                    Program.IniWriteValue("WiFi", "Profile", dlWifiProfile.SelectedItem.ToString());
+            };
+
+            UpdateWifiButton();
+        }
+
+        private void RefreshWifiProfiles()
+        {
+            string current = dlWifiProfile.SelectedItem?.ToString();
+            dlWifiProfile.Items.Clear();
+            foreach (string p in WifiManager.GetSavedProfiles())
+                dlWifiProfile.Items.Add(p);
+            if (current != null && dlWifiProfile.Items.Contains(current))
+                dlWifiProfile.SelectedItem = current;
+            else if (dlWifiProfile.Items.Count > 0)
+                dlWifiProfile.SelectedIndex = 0;
+        }
+
+        private void UpdateWifiButton()
+        {
+            if (btnWifiNow == null) return;
+            bool connected = WifiManager.IsWifiConnected();
+            btnWifiNow.Text = (mWifiConnectedByUs && connected) ? "Disconnect Now" : "Connect Now";
+            if (lblWifiStatus != null)
+                lblWifiStatus.Text = connected ? "WiFi: connected" : "WiFi: not connected";
+        }
+
+        private async void BtnWifiNow_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (mWifiConnectedByUs && WifiManager.IsWifiConnected())
+                {
+                    WifiDisconnect();
+                    return;
+                }
+                await ConnectWifiAsync();
+            }
+            catch (Exception ex) { AppLog.Line("WiFi button error: {0}", ex.Message); }
+        }
+
+        private async Task<bool> ConnectWifiAsync()
+        {
+            string profile = dlWifiProfile.SelectedItem?.ToString();
+            if (string.IsNullOrEmpty(profile))
+            {
+                AppLog.Line("WiFi: no profile selected");
+                return false;
+            }
+            if (WifiManager.IsWifiConnected())
+            {
+                AppLog.Line("WiFi: already connected");
+                return true;
+            }
+            AppLog.Line("WiFi: connecting to '{0}'", profile);
+            lblWifiStatus.Text = "WiFi: connecting...";
+            btnWifiNow.Enabled = false;
+            bool ok = await Task.Run(() => WifiManager.Connect(profile)) && await WifiManager.WaitForConnectionAsync();
+            btnWifiNow.Enabled = true;
+            if (ok)
+            {
+                mWifiConnectedByUs = true;
+                AppLog.Line("WiFi: connected to '{0}'", profile);
+            }
+            else
+            {
+                AppLog.Line("WiFi: failed to connect to '{0}'", profile);
+            }
+            UpdateWifiButton();
+            return ok;
+        }
+
+        private void WifiDisconnect()
+        {
+            if (!mWifiConnectedByUs) return;
+            AppLog.Line("WiFi: disconnecting");
+            Task.Run(() => WifiManager.Disconnect());
+            mWifiConnectedByUs = false;
+            UpdateWifiButton();
         }
 
         void LoadList()
@@ -975,23 +1180,38 @@ namespace wumgr
             SwitchList(UpdateLists.HiddenUpdates);
         }
 
-        private void btnHistory_CheckedChanged(object sender, EventArgs e)
+        private async void btnHistory_CheckedChanged(object sender, EventArgs e)
         {
-            if (agent.IsActive())
-                agent.UpdateHistory();
-            SwitchList(UpdateLists.UpdateHistory);
+            try
+            {
+                if (agent.IsActive())
+                    await agent.UpdateHistoryAsync();
+                SwitchList(UpdateLists.UpdateHistory);
+            }
+            catch (Exception ex) { AppLog.Line("History load error: {0}", ex.Message); }
         }
-        
-        private void btnSearch_Click(object sender, EventArgs e)
+
+        private async void btnSearch_Click(object sender, EventArgs e)
         {
-            if (!agent.IsActive() || agent.IsBusy())
-                return;
-            WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
-            if (chkOffline.Checked)
-                ret = agent.SearchForUpdates(chkDownload.Checked, chkOld.Checked);
-            else
-                ret = agent.SearchForUpdates(dlSource.Text, chkOld.Checked);
-            ShowResult(WuAgent.AgentOperation.CheckingUpdates, ret);
+            try
+            {
+                if (!agent.IsActive() || agent.IsBusy())
+                    return;
+
+                if (chkWifiConnect?.Checked == true && !WifiManager.IsWifiConnected())
+                {
+                    if (!await ConnectWifiAsync())
+                        return; // connect failed — don't search
+                }
+
+                WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
+                if (chkOffline.Checked)
+                    ret = agent.SearchForUpdates(chkDownload.Checked, chkOld.Checked);
+                else
+                    ret = agent.SearchForUpdates(dlSource.Text, chkOld.Checked);
+                ShowResult(WuAgent.AgentOperation.CheckingUpdates, ret);
+            }
+            catch (Exception ex) { AppLog.Line("Search error: {0}", ex.Message); }
         }
 
         private void btnDownload_Click(object sender, EventArgs e)
@@ -1158,6 +1378,14 @@ namespace wumgr
             lblStatus.Text = "";
             toolTip.SetToolTip(lblStatus, "");
 
+            // Disconnect on any terminal state of download-related ops (success, cancel, failure)
+            if (mWifiConnectedByUs && chkWifiDisconnect?.Checked == true &&
+                (args.Op == WuAgent.AgentOperation.DownloadingUpdates ||
+                 args.Op == WuAgent.AgentOperation.PreparingCheck ||
+                 args.Op == WuAgent.AgentOperation.CheckingUpdates ||
+                 args.Op == WuAgent.AgentOperation.CancelingOperation))
+                WifiDisconnect();
+
             ShowResult(args.Op, args.Ret, args.RebootNeeded);
         }
 
@@ -1165,6 +1393,9 @@ namespace wumgr
 
         private void ShowResult(WuAgent.AgentOperation op, WuAgent.RetCodes ret, bool reboot = false)
         {
+            if (reboot && op == WuAgent.AgentOperation.InstallingUpdates)
+                SetRebootRequired(true);
+
             if (op == WuAgent.AgentOperation.DownloadingUpdates && chkManual.Checked)
             {
                 if (ret == WuAgent.RetCodes.Success)

@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <!-- ServiceController / ServiceStartMode are in a separate package on .NET 10 -->
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.6" />
   </ItemGroup>
 
   <ItemGroup>
