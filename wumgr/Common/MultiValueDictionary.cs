@@ -1,18 +1,10 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 public class MultiValueDictionary<TKey, TValue> : Dictionary<TKey, List<TValue>>
 {
-    public MultiValueDictionary() : base()
-    {
-    }
-    
     public void Add(TKey key, TValue value)
     {
-        List<TValue> container = null;
-        if (!this.TryGetValue(key, out container))
+        if (!TryGetValue(key, out List<TValue> container))
         {
             container = new List<TValue>();
             base.Add(key, container);
@@ -22,67 +14,55 @@ public class MultiValueDictionary<TKey, TValue> : Dictionary<TKey, List<TValue>>
 
     public bool ContainsValue(TKey key, TValue value)
     {
-        bool toReturn = false;
-        List<TValue> values = null;
-        if (this.TryGetValue(key, out values))
-        {
-            toReturn = values.Contains(value);
-        }
-        return toReturn;
+        return TryGetValue(key, out List<TValue> values) && values.Contains(value);
     }
-    
+
     public void Remove(TKey key, TValue value)
     {
-        List<TValue> container = null;
-        if (this.TryGetValue(key, out container))
+        if (TryGetValue(key, out List<TValue> container))
         {
             container.Remove(value);
-            if (container.Count <= 0)
-            {
-                this.Remove(key);
-            }
+            if (container.Count == 0)
+                Remove(key);
         }
     }
-    
+
     public List<TValue> GetValues(TKey key, bool returnEmptySet = true)
     {
-        List<TValue> toReturn = null;
-        if (!base.TryGetValue(key, out toReturn) && returnEmptySet)
-        {
-            toReturn = new List<TValue>();
-        }
-        return toReturn;
+        if (!base.TryGetValue(key, out List<TValue> values) && returnEmptySet)
+            return new List<TValue>();
+        return values;
     }
 
     public int GetCount()
     {
-        int Count = 0;
+        int count = 0;
         foreach (KeyValuePair<TKey, List<TValue>> pair in this)
-            Count += pair.Value.Count;
-        return Count;
+            count += pair.Value.Count;
+        return count;
     }
 
     public TValue GetAt(int index)
     {
-        int Count = 0;
+        int count = 0;
         foreach (KeyValuePair<TKey, List<TValue>> pair in this)
         {
-            if (Count + pair.Value.Count > index)
-                return pair.Value[index - Count];
-            Count += pair.Value.Count;
+            if (count + pair.Value.Count > index)
+                return pair.Value[index - count];
+            count += pair.Value.Count;
         }
-        throw new IndexOutOfRangeException();
+        throw new System.IndexOutOfRangeException();
     }
 
     public TKey GetKey(int index)
     {
-        int Count = 0;
+        int count = 0;
         foreach (KeyValuePair<TKey, List<TValue>> pair in this)
         {
-            if (Count + pair.Value.Count > index)
+            if (count + pair.Value.Count > index)
                 return pair.Key;
-            Count += pair.Value.Count;
+            count += pair.Value.Count;
         }
-        throw new IndexOutOfRangeException();
+        throw new System.IndexOutOfRangeException();
     }
 }

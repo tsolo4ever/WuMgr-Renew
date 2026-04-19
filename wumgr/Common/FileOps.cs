@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.IO;
@@ -35,9 +31,6 @@ class FileOps
             }
 
             File.Move(from, to);
-
-            if (File.Exists(from))
-                return false;
         }
         catch (Exception e)
         {
@@ -91,9 +84,9 @@ class FileOps
     {
         //get file info
         FileInfo fi = new FileInfo(filePath);
-        if(!fi.Exists){
-            FileStream f_out = fi.OpenWrite();
-            f_out.Close();
+        if (!fi.Exists)
+        {
+            using FileStream f_out = fi.OpenWrite();
         }
 
         //get security access
@@ -129,8 +122,7 @@ class FileOps
         FileInfo fi = new FileInfo(filePath);
         try
         {
-            FileStream f_out = fi.OpenWrite();
-            f_out.Close();
+            using FileStream f_out = fi.OpenWrite();
             return true;
         }
         catch
@@ -150,7 +142,6 @@ class FileOps
     public static string SID_OwnerRights = "S-1-3-4"; //	Owner Rights
     public static string SID_NonUnique = "S-1-4"; //	Non-unique Authority
     public static string SID_NTAuth = "S-1-5"; //	NT Authority
-    public static string SID_AllServices = "S-1-5-80-0"; //	All Services
     public static string SID_DialUp = "S-1-5-1"; //	Dialup
     public static string SID_LocalAcc = "S-1-5-113"; //	Local account
     public static string SID_LocalAccAdmin = "S-1-5-114"; //	Local account and member of Administrators group

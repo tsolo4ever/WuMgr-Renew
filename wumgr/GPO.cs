@@ -265,8 +265,15 @@ namespace wumgr
             catch { }
         }
 
-        static public void ConfigSvc(string name, ServiceStartMode mode)
+        private static readonly HashSet<string> AllowedServices = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "UsoSvc", "WaaSMedicSvc" };
+
+        static private void ConfigSvc(string name, ServiceStartMode mode)
         {
+            if (!AllowedServices.Contains(name))
+            {
+                AppLog.Line("ConfigSvc: rejected unknown service name: {0}", name);
+                return;
+            }
             using var svc = new ServiceController(name);
             bool showErr = false;
             try
@@ -286,7 +293,7 @@ namespace wumgr
                     AppLog.Line("Error Stoping Service: {0}", name);
             }
 
-            using var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.SetValue | RegistryRights.ChangePermissions | RegistryRights.TakeOwnership);
+            using var subKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.SetValue | RegistryRights.ChangePermissions | RegistryRights.ReadPermissions);
             if (subKey == null)
             {
                 AppLog.Line("Service {0} does not exist", name);

@@ -1,15 +1,14 @@
-﻿using System;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO.Pipes;
 using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Threading;
-using System.Collections.Concurrent;
 
 class PipeIPC
 {
@@ -26,7 +25,6 @@ class PipeIPC
             pipeStream.Flush();
             pipeStream.WaitForPipeDrain();
             pipeStream.Close();
-            pipeStream.Dispose();
             pipeStream = null;
         }
 
@@ -37,13 +35,12 @@ class PipeIPC
             byte[] bytes = Encoding.UTF8.GetBytes(str);
             byte[] data = BitConverter.GetBytes(bytes.Length);
             byte[] buff = data.Concat(bytes).ToArray();
-
             return pipeStream.WriteAsync(buff, 0, buff.Length);
         }
 
         protected void initAsyncReader()
         {
-            new Action<PipeTmpl<T>>((p) => { p.RunAsyncByteReader((b) => { DataReceived?.Invoke(this, Encoding.UTF8.GetString(b).TrimEnd('\0')); }); })(this);
+            RunAsyncByteReader((b) => { DataReceived?.Invoke(this, Encoding.UTF8.GetString(b).TrimEnd('\0')); });
         }
 
         protected void RunAsyncByteReader(Action<byte[]> asyncReader)
@@ -51,26 +48,26 @@ class PipeIPC
             int len = sizeof(int);
             byte[] buff = new byte[len];
 
-            // read the length
             pipeStream.ReadAsync(buff, 0, len).ContinueWith((ret) =>
             {
-                if (ret.Result == 0)
+                if (ret.IsFaulted || ret.Result == 0)
                 {
+                    if (ret.IsFaulted) AppLog.Line("Pipe read error: {0}", ret.Exception?.GetBaseException().Message);
                     PipeClosed?.Invoke(this, EventArgs.Empty);
                     return;
                 }
-                
-                // read the data
+
                 len = BitConverter.ToInt32(buff, 0);
                 buff = new byte[len];
                 pipeStream.ReadAsync(buff, 0, len).ContinueWith((ret2) =>
                 {
-                    if (ret2.Result == 0)
+                    if (ret2.IsFaulted || ret2.Result == 0)
                     {
+                        if (ret2.IsFaulted) AppLog.Line("Pipe read error: {0}", ret2.Exception?.GetBaseException().Message);
                         PipeClosed?.Invoke(this, EventArgs.Empty);
                         return;
                     }
-                    
+
                     asyncReader(buff);
                     RunAsyncByteReader(asyncReader);
                 });
@@ -87,13 +84,14 @@ class PipeIPC
     {
         public event EventHandler<EventArgs> Connected;
 
-        public PipeServer(string pipeName, bool fullControl = false)
+        public PipeServer(string pipeName)
         {
             PipeSecurity pipeSa = new PipeSecurity();
-            PipeAccessRights rights = fullControl ? PipeAccessRights.FullControl : PipeAccessRights.ReadWrite;
-            pipeSa.SetAccessRule(new PipeAccessRule(new SecurityIdentifier(FileOps.SID_Worls), rights, AccessControlType.Allow));
-            int buffLen = 1029; // 4 + 1024 + 1
-            // NamedPipeServerStream constructor with PipeSecurity was removed in .NET 10; use the ACL factory
+            // Allow only the current user — a non-elevated second instance runs as the same
+            // user and can still connect, but other users on the machine cannot.
+            SecurityIdentifier currentUser = WindowsIdentity.GetCurrent().User;
+            pipeSa.SetAccessRule(new PipeAccessRule(currentUser, PipeAccessRights.ReadWrite, AccessControlType.Allow));
+            int buffLen = 1029; // 4-byte length prefix + 1024 data + 1
             pipeStream = NamedPipeServerStreamAcl.Create(pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Message, PipeOptions.Asynchronous, buffLen, buffLen, pipeSa);
             pipeStream.BeginWaitForConnection(new AsyncCallback(PipeConnected), null);
         }
@@ -121,29 +119,26 @@ class PipeIPC
             }
             catch
             {
-                return false; // timeout
+                return false;
             }
 
             DataReceived += (sndr, data) => {
-                MessageQueue.Push(data);
+                MessageQueue.Enqueue(data);
             };
 
             initAsyncReader();
             return true;
         }
 
-        private ConcurrentStack<string> MessageQueue = new ConcurrentStack<string>(); // LIFO
+        private ConcurrentQueue<string> MessageQueue = new ConcurrentQueue<string>();
 
         public string Read(int TimeOut = 10000)
         {
-            MessageQueue.Clear();
-            // DateTime.Now.Ticks is in 100 ns, TimeOut is in ms
-            for (long ticksEnd = DateTime.Now.Ticks + TimeOut * 10000; ticksEnd > DateTime.Now.Ticks;)
+            while (MessageQueue.TryDequeue(out _)) { } // clear queue
+            for (long ticksEnd = DateTime.Now.Ticks + TimeOut * 10000L; ticksEnd > DateTime.Now.Ticks;)
             {
                 Application.DoEvents();
-                if (!IsConnected())
-                    break;
-                if (MessageQueue.Count > 0)
+                if (!IsConnected() || !MessageQueue.IsEmpty)
                     break;
             }
             return Read();
@@ -151,53 +146,47 @@ class PipeIPC
 
         public string Read()
         {
-            // the MessageQueue is a last in first out type of container, so we need to reverse it
-            string ret = string.Join("\0", MessageQueue.ToArray().Reverse());
-            MessageQueue.Clear();
-            return ret;
+            var messages = new List<string>();
+            while (MessageQueue.TryDequeue(out string msg))
+                messages.Add(msg);
+            return string.Join("\0", messages);
         }
     }
 
     private Dispatcher mDispatcher;
-
     private List<PipeServer> serverPipes;
     private List<PipeClient> clientPipes;
-    private bool mFullControl = false;
 
     public PipeIPC(string PipeName)
     {
         mDispatcher = Dispatcher.CurrentDispatcher;
-
         mPipeName = PipeName;
-
         serverPipes = new List<PipeServer>();
         clientPipes = new List<PipeClient>();
     }
 
-    // Delegate for passing received message back to caller
     public delegate void DelegateMessage(PipeServer pipe, string data);
     public event DelegateMessage PipeMessage;
 
-    public void Listen(bool fullControl = false)
+    public void Listen()
     {
-        mFullControl = fullControl;
-        PipeServer serverPipe = new PipeServer(mPipeName, mFullControl);
+        PipeServer serverPipe = new PipeServer(mPipeName);
         serverPipes.Add(serverPipe);
 
         serverPipe.DataReceived += (sndr, data) => {
-            mDispatcher.Invoke(new Action(() => {
+            mDispatcher.BeginInvoke(new Action(() => {
                 PipeMessage?.Invoke(serverPipe, data);
             }));
         };
 
         serverPipe.Connected += (sndr, args) => {
-            mDispatcher.Invoke(new Action(() => {
-                Listen(mFullControl);
+            mDispatcher.BeginInvoke(new Action(() => {
+                Listen();
             }));
         };
 
         serverPipe.PipeClosed += (sndr, args) => {
-            mDispatcher.Invoke(new Action(() => {
+            mDispatcher.BeginInvoke(new Action(() => {
                 serverPipes.Remove(serverPipe);
             }));
         };
@@ -212,7 +201,7 @@ class PipeIPC
         clientPipes.Add(clientPipe);
 
         clientPipe.PipeClosed += (sndr, args) => {
-            mDispatcher.Invoke(new Action(() => {
+            mDispatcher.BeginInvoke(new Action(() => {
                 clientPipes.Remove(clientPipe);
             }));
         };

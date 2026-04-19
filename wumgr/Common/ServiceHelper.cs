@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
 
 public static class ServiceHelper
 {
@@ -24,39 +20,38 @@ public static class ServiceHelper
     private const uint SERVICE_NO_CHANGE = 0xFFFFFFFF;
     private const uint SERVICE_QUERY_CONFIG = 0x00000001;
     private const uint SERVICE_CHANGE_CONFIG = 0x00000002;
-    private const uint SC_MANAGER_ALL_ACCESS = 0x000F003F;
     private const uint SC_MANAGER_CONNECT = 0x0001;
     private const uint SC_MANAGER_ENUMERATE_SERVICE = 0x0004;
 
     public static void ChangeStartMode(ServiceController svc, ServiceStartMode mode)
     {
-        //var scManagerHandle = OpenSCManager(null, null, SC_MANAGER_ALL_ACCESS);
-        var scManagerHandle = OpenSCManager(null, null, SC_MANAGER_CONNECT + SC_MANAGER_ENUMERATE_SERVICE);
+        IntPtr scManagerHandle = OpenSCManager(null, null, SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE);
         if (scManagerHandle == IntPtr.Zero)
-        {
             throw new ExternalException("Open Service Manager Error");
-        }
 
-        var serviceHandle = OpenService(
-            scManagerHandle,
-            svc.ServiceName,
-            SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG);
-
-        if (serviceHandle == IntPtr.Zero)
+        try
         {
-            throw new ExternalException("Open Service Error");
+            IntPtr serviceHandle = OpenService(scManagerHandle, svc.ServiceName, SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG);
+            if (serviceHandle == IntPtr.Zero)
+                throw new ExternalException("Open Service Error");
+
+            try
+            {
+                bool result = ChangeServiceConfig(serviceHandle, SERVICE_NO_CHANGE, (uint)mode, SERVICE_NO_CHANGE, null, null, IntPtr.Zero, null, null, null, null);
+                if (!result)
+                {
+                    var win32Exception = new Win32Exception(Marshal.GetLastWin32Error());
+                    throw new ExternalException("Could not change service start type: " + win32Exception.Message);
+                }
+            }
+            finally
+            {
+                CloseServiceHandle(serviceHandle);
+            }
         }
-
-        var result = ChangeServiceConfig(serviceHandle, SERVICE_NO_CHANGE, (uint)mode, SERVICE_NO_CHANGE, null, null, IntPtr.Zero, null, null, null, null);
-
-        if (result == false)
+        finally
         {
-            int nError = Marshal.GetLastWin32Error();
-            var win32Exception = new Win32Exception(nError);
-            throw new ExternalException("Could not change service start type: "+ win32Exception.Message);
+            CloseServiceHandle(scManagerHandle);
         }
-
-        CloseServiceHandle(serviceHandle);
-        CloseServiceHandle(scManagerHandle);
     }
 }

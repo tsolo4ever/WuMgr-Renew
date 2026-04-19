@@ -78,7 +78,6 @@ namespace wumgr
             this.chkMsUpd = new System.Windows.Forms.CheckBox();
             this.chkOld = new System.Windows.Forms.CheckBox();
             this.chkManual = new System.Windows.Forms.CheckBox();
-            this.chkPipeFullCtrl = new System.Windows.Forms.CheckBox();
             this.lblColorMode = new System.Windows.Forms.Label();
             this.dlColorMode = new System.Windows.Forms.ComboBox();
             this.chkDownload = new System.Windows.Forms.CheckBox();
@@ -584,7 +583,6 @@ namespace wumgr
             this.tabOptions.Controls.Add(this.chkMsUpd);
             this.tabOptions.Controls.Add(this.chkOld);
             this.tabOptions.Controls.Add(this.chkManual);
-            this.tabOptions.Controls.Add(this.chkPipeFullCtrl);
             this.tabOptions.Controls.Add(this.lblColorMode);
             this.tabOptions.Controls.Add(this.dlColorMode);
             this.tabOptions.Controls.Add(this.chkDownload);
@@ -691,17 +689,6 @@ namespace wumgr
             this.chkManual.Text = "\'Manual\' Download/Install";
             this.chkManual.UseVisualStyleBackColor = false;
             this.chkManual.CheckedChanged += new System.EventHandler(this.chkManual_CheckedChanged);
-            //
-            // chkPipeFullCtrl
-            //
-            this.chkPipeFullCtrl.AutoSize = true;
-            this.chkPipeFullCtrl.Location = new System.Drawing.Point(4, 109);
-            this.chkPipeFullCtrl.Name = "chkPipeFullCtrl";
-            this.chkPipeFullCtrl.Size = new System.Drawing.Size(165, 17);
-            this.chkPipeFullCtrl.TabIndex = 9;
-            this.chkPipeFullCtrl.Text = "IPC Pipe Full Control (not recommended)";
-            this.chkPipeFullCtrl.UseVisualStyleBackColor = false;
-            this.chkPipeFullCtrl.CheckedChanged += new System.EventHandler(this.chkPipeFullCtrl_CheckedChanged);
             //
             // lblColorMode
             //
@@ -1022,7 +1009,6 @@ namespace wumgr
         private System.Windows.Forms.CheckBox chkOffline;
         private System.Windows.Forms.CheckBox chkDownload;
         private System.Windows.Forms.CheckBox chkManual;
-        private System.Windows.Forms.CheckBox chkPipeFullCtrl;
         private System.Windows.Forms.Label lblColorMode;
         private System.Windows.Forms.ComboBox dlColorMode;
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;

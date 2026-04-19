@@ -235,7 +235,6 @@ namespace wumgr
             chkOffline.Checked = MiscFunc.parseInt(GetConfig("Offline", "0")) != 0;
             chkDownload.Checked = MiscFunc.parseInt(GetConfig("Download", "1")) != 0;
             chkManual.Checked = MiscFunc.parseInt(GetConfig("Manual", "0")) != 0;
-            chkPipeFullCtrl.Checked = MiscFunc.parseInt(GetConfig("PipeFullControl", "0")) != 0;
 
             string savedMode = GetConfig("ColorMode", "system");
             dlColorMode.SelectedIndex = savedMode.Equals("classic", StringComparison.OrdinalIgnoreCase) ? 1
@@ -345,7 +344,7 @@ namespace wumgr
             mTimer.Enabled = true;
 
             Program.ipc.PipeMessage += new PipeIPC.DelegateMessage(PipesMessageHandler);
-            Program.ipc.Listen(chkPipeFullCtrl.Checked);
+            Program.ipc.Listen();
 
             // Apply dark visual styles after all handles are created
             this.Shown += (s, e) => {
@@ -1443,12 +1442,6 @@ namespace wumgr
             SetConfig("Manual", chkManual.Checked ? "1" : "0");
         }
 
-        private void chkPipeFullCtrl_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            SetConfig("PipeFullControl", chkPipeFullCtrl.Checked ? "1" : "0");
-        }
 
         private void dlColorMode_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -1612,7 +1605,6 @@ namespace wumgr
             chkOffline.Text = Translate.fmt("lbl_off");
             chkDownload.Text = Translate.fmt("lbl_dl");
             chkManual.Text = Translate.fmt("lbl_man");
-            chkPipeFullCtrl.Text = "IPC Pipe Full Control (not recommended)";
             chkOld.Text = Translate.fmt("lbl_old");
             chkMsUpd.Text = Translate.fmt("lbl_ms");
 

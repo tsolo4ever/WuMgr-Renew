@@ -391,11 +391,7 @@ namespace wumgr
             {
                 //string query = "(IsInstalled = 0 and IsHidden = 0) or (IsInstalled = 1 and IsHidden = 0) or (IsHidden = 1)";
                 //string query = "(IsInstalled = 0 and IsHidden = 0) or (IsInstalled = 1 and IsHidden = 0) or (IsHidden = 1) or (IsInstalled = 0 and IsHidden = 0 and DeploymentAction='OptionalInstallation') or (IsInstalled = 1 and IsHidden = 0 and DeploymentAction='OptionalInstallation') or (IsHidden = 1 and DeploymentAction='OptionalInstallation')";
-                string query;
-                if (MiscFunc.IsWindows7OrLower)
-                    query = "(IsInstalled = 0 and IsHidden = 0) or (IsInstalled = 1 and IsHidden = 0) or (IsHidden = 1)";
-                else
-                    query = "(IsInstalled = 0 and IsHidden = 0 and DeploymentAction=*) or (IsInstalled = 1 and IsHidden = 0 and DeploymentAction=*) or (IsHidden = 1 and DeploymentAction=*)";
+                string query = "(IsInstalled = 0 and IsHidden = 0 and DeploymentAction=*) or (IsInstalled = 1 and IsHidden = 0 and DeploymentAction=*) or (IsHidden = 1 and DeploymentAction=*)";
                 mSearchJob = mUpdateSearcher.BeginSearch(query, mCallback, null);
             }
             catch (Exception err)
@@ -1093,7 +1089,16 @@ namespace wumgr
                 Update.SupportUrl = Program.IniReadValue(Update.KB, "SupportUrl", "", INIPath);
                 string dlValue = Program.IniReadValue(Update.KB, "Downloads", "", INIPath);
                 if (dlValue.Length > 0)
-                    Update.Downloads.AddRange(dlValue.Split('|'));
+                {
+                    foreach (string u in dlValue.Split('|'))
+                    {
+                        if (Uri.TryCreate(u, UriKind.Absolute, out Uri uri) &&
+                            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                            Update.Downloads.Add(u);
+                        else
+                            AppLog.Line("Skipping invalid download URL from cache: {0}", u);
+                    }
+                }
 
                 Update.State = (MsUpdate.UpdateState)MiscFunc.parseInt(Program.IniReadValue(Update.KB, "State", "0", INIPath));
                 Update.Attributes = MiscFunc.parseInt(Program.IniReadValue(Update.KB, "Attributes", "0", INIPath));

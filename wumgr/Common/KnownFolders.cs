@@ -54,16 +54,13 @@ public static class KnownFolders
     {
         int result = SHGetKnownFolderPath(new Guid(_knownFolderGuids[(int)knownFolder]),
             (uint)flags, new IntPtr(defaultUser ? -1 : 0), out IntPtr outPath);
-        if (result >= 0)
+        try
         {
-            string path = Marshal.PtrToStringUni(outPath);
-            Marshal.FreeCoTaskMem(outPath);
-            return path;
+            return result >= 0 ? Marshal.PtrToStringUni(outPath) : null;
         }
-        else
+        finally
         {
-            //throw new ExternalException("Unable to retrieve the known folder path. It may not be available on this system.", result);
-            return null;
+            Marshal.FreeCoTaskMem(outPath);
         }
     }
 

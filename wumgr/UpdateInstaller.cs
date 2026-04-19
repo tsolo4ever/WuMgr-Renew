@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Threading;
 
@@ -111,6 +112,25 @@ namespace wumgr
             NextUpdate();
         }
 
+        private static void SafeExtractToDirectory(string zipPath, string destPath)
+        {
+            string fullDest = Path.GetFullPath(destPath) + Path.DirectorySeparatorChar;
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+            foreach (var entry in archive.Entries)
+            {
+                string fullEntry = Path.GetFullPath(Path.Combine(fullDest, entry.FullName));
+                if (!fullEntry.StartsWith(fullDest, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Zip slip detected: {entry.FullName}");
+                if (entry.Name.Length == 0) // directory entry
+                {
+                    Directory.CreateDirectory(fullEntry);
+                    continue;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(fullEntry));
+                entry.ExtractToFile(fullEntry, overwrite: false);
+            }
+        }
+
         public void RunInstall(object parameters)
         {
             List<string> Files = (List<string>)parameters;
@@ -133,14 +153,14 @@ namespace wumgr
 
                     if (ext.Equals(".zip", StringComparison.CurrentCultureIgnoreCase))
                     {
-                        string path = Path.GetDirectoryName(File) + @"\files";// + Path.GetFileNameWithoutExtension(File);
+                        string path = Path.GetFullPath(Path.GetDirectoryName(File) + @"\files");
 
                         if (!Directory.Exists(path)) // is it already unpacked?
-                            ZipFile.ExtractToDirectory(File, path);
+                            SafeExtractToDirectory(File, path);
 
                         var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".msu", ".msi", ".cab", ".exe" };
                         var foundFiles = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories).Where(s => supportedExtensions.Contains(Path.GetExtension(s)));
-                        if (foundFiles.Count() == 0)
+                        if (!foundFiles.Any())
                             throw new System.IO.FileNotFoundException("Expected file not found in zip");
 
                         File = foundFiles.First();
@@ -191,14 +211,19 @@ namespace wumgr
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = fileName;
 
-            // ToDo: load from file
             string name = Path.GetFileNameWithoutExtension(fileName);
-            if(name.IndexOf("ndp", StringComparison.CurrentCultureIgnoreCase) == 0 || 
-               name.IndexOf("OFV", StringComparison.CurrentCultureIgnoreCase) == 0 ||
-               name.IndexOf("2553065", StringComparison.CurrentCultureIgnoreCase) == 0)
-                startInfo.Arguments = "/q /norestart";
+            if (name.IndexOf("ndp", StringComparison.CurrentCultureIgnoreCase) == 0 ||
+                name.IndexOf("OFV", StringComparison.CurrentCultureIgnoreCase) == 0 ||
+                name.IndexOf("2553065", StringComparison.CurrentCultureIgnoreCase) == 0)
+            {
+                startInfo.ArgumentList.Add("/q");
+                startInfo.ArgumentList.Add("/norestart");
+            }
             else
-                startInfo.Arguments = "/q /z";
+            {
+                startInfo.ArgumentList.Add("/q");
+                startInfo.ArgumentList.Add("/z");
+            }
 
             return ExecTask(startInfo);
         }
@@ -207,7 +232,10 @@ namespace wumgr
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = @"%SystemRoot%\System32\msiexec.exe";
-            startInfo.Arguments = "/i \"" + fileName  + "\" /qn /norestart";
+            startInfo.ArgumentList.Add("/i");
+            startInfo.ArgumentList.Add(fileName);
+            startInfo.ArgumentList.Add("/qn");
+            startInfo.ArgumentList.Add("/norestart");
 
             return ExecTask(startInfo);
         }
@@ -216,7 +244,9 @@ namespace wumgr
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = @"%SystemRoot%\System32\wusa.exe";
-            startInfo.Arguments = "\"" + fileName + "\" /quiet /norestart";
+            startInfo.ArgumentList.Add(fileName);
+            startInfo.ArgumentList.Add("/quiet");
+            startInfo.ArgumentList.Add("/norestart");
 
             return ExecTask(startInfo);
         }
@@ -227,7 +257,10 @@ namespace wumgr
             {
                 using var proc = new Process();
                 proc.StartInfo.FileName = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\Dism.exe");
-                proc.StartInfo.Arguments = "/Online /Get-PackageInfo /PackagePath:\"" + fileName + "\" /English";
+                proc.StartInfo.ArgumentList.Add("/Online");
+                proc.StartInfo.ArgumentList.Add("/Get-PackageInfo");
+                proc.StartInfo.ArgumentList.Add("/PackagePath:" + fileName);
+                proc.StartInfo.ArgumentList.Add("/English");
                 proc.StartInfo.RedirectStandardOutput = true;
                 proc.StartInfo.RedirectStandardError = true;
                 proc.StartInfo.UseShellExecute = false;
@@ -240,16 +273,14 @@ namespace wumgr
                     string[] line = proc.StandardOutput.ReadLine().Split(':');
                     if (line.Length != 2)
                         continue;
-                    
-                    if(!line[0].Trim().Equals("Applicable", StringComparison.CurrentCultureIgnoreCase))
+                    if (!line[0].Trim().Equals("Applicable", StringComparison.CurrentCultureIgnoreCase))
                         continue;
-
                     return line[1].Trim().Equals("Yes", StringComparison.CurrentCultureIgnoreCase);
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine("Dism error: {0}", e.Message);
+                AppLog.Line("Dism error: {0}", e.Message);
             }
             return false;
         }
@@ -257,11 +288,16 @@ namespace wumgr
         private int InstallCab(string fileName)
         {
             if (!CheckCab(fileName) || Canceled)
-                return 0; // update not aplicable or user canceled
+                return 0; // update not applicable or user canceled
 
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = @"%SystemRoot%\System32\Dism.exe";
-            startInfo.Arguments = "/Online /Quiet /NoRestart /Add-Package /PackagePath:\"" + fileName + "\" /IgnoreCheck";
+            startInfo.ArgumentList.Add("/Online");
+            startInfo.ArgumentList.Add("/Quiet");
+            startInfo.ArgumentList.Add("/NoRestart");
+            startInfo.ArgumentList.Add("/Add-Package");
+            startInfo.ArgumentList.Add("/PackagePath:" + fileName);
+            startInfo.ArgumentList.Add("/IgnoreCheck");
 
             return ExecTask(startInfo);
         }
@@ -312,28 +348,39 @@ namespace wumgr
             bool ok = true;
             bool reboot = false;
 
-            try
+            string kbNumber = KB.Length > 2 ? KB.Substring(2) : "";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(kbNumber, @"^\d+$"))
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo();
-                startInfo.FileName = @"%SystemRoot%\System32\wusa.exe";
-                startInfo.Arguments = "/uninstall /kb:" + KB.Substring(2) + " /norestart"; // /quiet 
-
-                int exitCode = ExecTask(startInfo);
-
-                if (exitCode == 3010 || exitCode == 1641)
-                {
-                    reboot = true;
-                }
-                else if (exitCode != 1 && exitCode != 0)
-                {
-                    AppLog.Line("Error, exit coded: {0}", exitCode);
-                    ok = false; // some error
-                }
-            }
-            catch (Exception e)
-            {
+                AppLog.Line("Invalid KB number: {0}", KB);
                 ok = false;
-                Console.WriteLine("Error removing update: {0}", e.Message);
+            }
+            else
+            {
+                try
+                {
+                    ProcessStartInfo startInfo = new ProcessStartInfo();
+                    startInfo.FileName = @"%SystemRoot%\System32\wusa.exe";
+                    startInfo.ArgumentList.Add("/uninstall");
+                    startInfo.ArgumentList.Add("/kb:" + kbNumber);
+                    startInfo.ArgumentList.Add("/norestart");
+
+                    int exitCode = ExecTask(startInfo);
+
+                    if (exitCode == 3010 || exitCode == 1641)
+                    {
+                        reboot = true;
+                    }
+                    else if (exitCode != 1 && exitCode != 0)
+                    {
+                        AppLog.Line("Error, exit code: {0}", exitCode);
+                        ok = false;
+                    }
+                }
+                catch (Exception e)
+                {
+                    ok = false;
+                    AppLog.Line("Error removing update: {0}", e.Message);
+                }
             }
             
             mDispatcher.BeginInvoke(new Action(() => {

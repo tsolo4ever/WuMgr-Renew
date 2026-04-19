@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe' d:\\\\github\\\\wumgr\\\\wumgr.sln /p:Configuration=Release /verbosity:minimal 2>&1\")"
+    ]
+  }
+}

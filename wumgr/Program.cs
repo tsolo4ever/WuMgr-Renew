@@ -202,20 +202,10 @@ namespace wumgr
             if (MiscFunc.parseInt(IniReadValue("OnClose", "DisableWuAuServ", "0", ToolsINI)) != 0)
                 Agent.EnableWuAuServ(false);
 
-            // Note: With the UAC bypass the onclose parameter can be used for a local privilege escalation exploit
-            if (!TestArg("-NoUAC"))
-            {
-                for (int i = 0; i < Program.args.Length; i++)
-                {
-                    if (Program.args[i].Equals("-onclose", StringComparison.CurrentCultureIgnoreCase) && i + 1 < Program.args.Length)
-                        DoExec(PrepExec(Program.args[++i], true));
-                }
-            }
         }
 
         static public ProcessStartInfo PrepExec(string command, bool silent = true)
         {
-            // -onclose """cm d.exe"" /c ping 10.70.0.1" -test
             int pos = -1;
             if (command.Length > 0 && command.Substring(0, 1) == "\"")
             {
@@ -450,7 +440,6 @@ namespace wumgr
         {
             string Message = "Available command line options\r\n";
             string[] Help = {"-tray\t\tStart in Tray",
-                                    "-onclose [cmd]\tExecute commands when closing",
                                     "-update\t\tSearch for updates on start",
                                     "-console\t\tshow console (for debugging)",
                                     "-help\t\tShow this help message" };

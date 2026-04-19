@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Threading;
 
 class AppLog
@@ -25,14 +22,14 @@ class AppLog
     {
         mDispatcher.BeginInvoke(new Action(() => {
             mLogList.Add(line);
-            while (mLogList.Count > 100)
+            if (mLogList.Count > 100)
                 mLogList.RemoveAt(0);
 
             Logger?.Invoke(this, new LogEventArgs(line));
         }));
     }
 
-    static public List<string> GetLog() { return mInstance.mLogList; }
+    static public List<string> GetLog() { return mInstance?.mLogList; }
 
     public class LogEventArgs : EventArgs
     {

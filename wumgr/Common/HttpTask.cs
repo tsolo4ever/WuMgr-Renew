@@ -1,19 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+using System;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Threading;
 
 
 class HttpTask
 {
-    //const int DefaultTimeout = 2 * 60 * 1000; // 2 minutes timeout
-    const int BUFFER_SIZE = 1024;
+    const int BUFFER_SIZE = 65536;
     private byte[] BufferRead;
     private HttpWebRequest request;
     private HttpWebResponse response;
@@ -23,8 +16,9 @@ class HttpTask
     private string mUrl;
     private string mDlPath;
     private string mDlName;
-    private int mLength = -1;
-    private int mOffset = -1;
+    private long mLength = -1;
+    private long mOffset = -1;
+    private int mOldPercent = -1;
     private bool Canceled = false;
     private DateTime lastTime;
     private DateTime mStartTime;
@@ -37,66 +31,29 @@ class HttpTask
         mUrl = Url;
         mDlPath = DlPath;
         mDlName = DlName;
-
-        BufferRead = null;
-        request = null;
-        response = null;
-        streamResponse = null;
-        streamWriter = null;
         mDispatcher = Dispatcher.CurrentDispatcher;
     }
-
-    // Abort the request if the timer fires.
-    /*private static void TimeoutCallback(object state, bool timedOut)
-    {
-        if (timedOut)
-        {
-            HttpWebRequest request = state as HttpWebRequest;
-            if (request != null)
-                request.Abort();
-        }
-    }*/
 
     public bool Start()
     {
         Canceled = false;
         try
         {
-            // Create a HttpWebrequest object to the desired URL. 
-            request = (HttpWebRequest)WebRequest.Create(mUrl);
-            //myHttpWebRequest.AllowAutoRedirect = false;
-
-            /**
-                * If you are behind a firewall and you do not have your browser proxy setup
-                * you need to use the following proxy creation code.
-
-                // Create a proxy object.
-                WebProxy myProxy = new WebProxy();
-
-                // Associate a new Uri object to the _wProxy object, using the proxy address
-                // selected by the user.
-                myProxy.Address = new Uri("http://myproxy");
-
-
-                // Finally, initialize the Web request object proxy property with the _wProxy
-                // object.
-                myHttpWebRequest.Proxy=myProxy;
-                ***/
-
+            if (!Uri.TryCreate(mUrl, UriKind.Absolute, out Uri uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                AppLog.Line("Download rejected, invalid URL scheme: {0}", mUrl);
+                return false;
+            }
+            request = (HttpWebRequest)WebRequest.Create(uri);
             BufferRead = new byte[BUFFER_SIZE];
             mOffset = 0;
-
-            // Start the asynchronous request.
-            IAsyncResult result = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), this);
-
-            // this line implements the timeout, if there is a timeout, the callback fires and the request becomes aborted
-            //ThreadPool.RegisterWaitForSingleObject(result.AsyncWaitHandle, new WaitOrTimerCallback(TimeoutCallback), request, DefaultTimeout, true);          
+            request.BeginGetResponse(new AsyncCallback(RespCallback), this);
             return true;
         }
         catch (Exception e)
         {
-            Console.WriteLine("\nMain Exception raised!");
-            Console.WriteLine("\nMessage:{0}", e.Message);
+            AppLog.Line("Download start failed: {0}", e.Message);
         }
         return false;
     }
@@ -110,7 +67,6 @@ class HttpTask
 
     private void Finish(int Success, int ErrCode, Exception Error = null)
     {
-        // Release the HttpWebResponse resource.
         if (response != null)
         {
             response.Close();
@@ -118,7 +74,6 @@ class HttpTask
                 streamResponse.Close();
             if (streamWriter != null)
                 streamWriter.Close();
-
         }
         response = null;
         request = null;
@@ -129,9 +84,7 @@ class HttpTask
         {
             try
             {
-                if (File.Exists(mDlPath + @"\" + mDlName))
-                    File.Delete(mDlPath + @"\" + mDlName);
-                File.Move(mDlPath + @"\" + mDlName + ".tmp", mDlPath + @"\" + mDlName);
+                File.Move(mDlPath + @"\" + mDlName + ".tmp", mDlPath + @"\" + mDlName, overwrite: true);
             }
             catch
             {
@@ -139,7 +92,7 @@ class HttpTask
                 mDlName += ".tmp";
             }
 
-            try { File.SetLastWriteTime(mDlPath + @"\" + mDlName, lastTime); } catch { } // set last mod time
+            try { File.SetLastWriteTime(mDlPath + @"\" + mDlName, lastTime); } catch { }
         }
         else if (Success == 2)
         {
@@ -147,7 +100,7 @@ class HttpTask
         }
         else
         {
-            try { File.Delete(mDlPath + @"\" + mDlName + ".tmp"); } catch { } // delete partial file
+            try { File.Delete(mDlPath + @"\" + mDlName + ".tmp"); } catch { }
             AppLog.Line("Failed to download file {0}", mDlPath + @"\" + mDlName);
         }
 
@@ -172,37 +125,32 @@ class HttpTask
         HttpTask task = (HttpTask)asynchronousResult.AsyncState;
         try
         {
-            // State of request is asynchronous.
             task.response = (HttpWebResponse)task.request.EndGetResponse(asynchronousResult);
-
             ErrCode = (int)task.response.StatusCode;
-
-            Console.WriteLine("The server at {0} returned {1}", task.response.ResponseUri, task.response.StatusCode);
 
             string fileName = Path.GetFileName(task.response.ResponseUri.ToString());
             task.lastTime = DateTime.Now;
 
-            Console.WriteLine("With headers:");
             foreach (string key in task.response.Headers.AllKeys)
             {
-                Console.WriteLine("\t{0}:{1}", key, task.response.Headers[key]);
-
                 if (key.Equals("Content-Length", StringComparison.CurrentCultureIgnoreCase))
                 {
-                    task.mLength = int.Parse(task.response.Headers[key]);
+                    if (long.TryParse(task.response.Headers[key], out long len))
+                        task.mLength = len;
                 }
                 else if (key.Equals("Content-Disposition", StringComparison.CurrentCultureIgnoreCase))
                 {
                     string cd = task.response.Headers[key];
-                    fileName = Path.GetFileName(cd.Substring(cd.IndexOf("filename=") + 9).Replace("\"", ""));
+                    int idx = cd.IndexOf("filename=");
+                    if (idx >= 0)
+                        fileName = Path.GetFileName(cd.Substring(idx + 9).Replace("\"", ""));
                 }
                 else if (key.Equals("Last-Modified", StringComparison.CurrentCultureIgnoreCase))
                 {
-                    task.lastTime = DateTime.Parse(task.response.Headers[key]);
+                    if (DateTime.TryParse(task.response.Headers[key], out DateTime dt))
+                        task.lastTime = dt;
                 }
             }
-
-            //Console.WriteLine(task.lastTime);
 
             if (task.mDlName == null)
                 task.mDlName = fileName;
@@ -215,7 +163,6 @@ class HttpTask
             }
             else
             {
-                // prepare download filename
                 if (!Directory.Exists(task.mDlPath))
                     Directory.CreateDirectory(task.mDlPath);
                 if (task.mDlName.Length == 0 || task.mDlName[0] == '?')
@@ -225,13 +172,10 @@ class HttpTask
                 if (info.Exists)
                     info.Delete();
 
-                // Read the response into a Stream object.
                 task.streamResponse = task.response.GetResponseStream();
-
                 task.streamWriter = info.OpenWrite();
                 task.mStartTime = DateTime.Now;
 
-                // Begin the Reading of the contents of the HTML page and print it to the console.
                 task.streamResponse.BeginRead(task.BufferRead, 0, BUFFER_SIZE, new AsyncCallback(ReadCallBack), task);
                 return;
             }
@@ -241,7 +185,6 @@ class HttpTask
             if (e.Response != null)
             {
                 string fileName = Path.GetFileName(e.Response.ResponseUri.AbsolutePath.ToString());
-
                 if (task.mDlName == null)
                     task.mDlName = fileName;
 
@@ -250,28 +193,23 @@ class HttpTask
                     Success = 2;
             }
 
-            if(Success == 0)
+            if (Success == 0)
             {
                 ErrCode = -2;
                 Error = e;
-                Console.WriteLine("\nRespCallback Exception raised!");
-                Console.WriteLine("\nMessage:{0}", e.Message);
-                Console.WriteLine("\nStatus:{0}", e.Status);
+                AppLog.Line("Download error: {0} ({1})", e.Message, e.Status);
             }
         }
         catch (Exception e)
         {
             ErrCode = -2;
             Error = e;
-            Console.WriteLine("\nRespCallback Exception raised!");
-            Console.WriteLine("\nMessage:{0}", e.Message);
+            AppLog.Line("Download error: {0}", e.Message);
         }
         task.mDispatcher.Invoke(new Action(() => {
             task.Finish(Success, ErrCode, Error);
         }));
     }
-
-    private int mOldPercent = -1;
 
     private static void ReadCallBack(IAsyncResult asyncResult)
     {
@@ -282,42 +220,35 @@ class HttpTask
         try
         {
             int read = task.streamResponse.EndRead(asyncResult);
-            // Read the HTML page and then print it to the console.
             if (read > 0)
             {
                 task.streamWriter.Write(task.BufferRead, 0, read);
                 task.mOffset += read;
 
-                int Percent = task.mLength > 0 ? (int)((Int64)100 * task.mOffset / task.mLength) : -1;
+                int Percent = task.mLength > 0 ? (int)(100L * task.mOffset / task.mLength) : -1;
                 if (Percent != task.mOldPercent)
                 {
                     task.mOldPercent = Percent;
                     double elapsed = (DateTime.Now - task.mStartTime).TotalSeconds;
                     long speed = elapsed > 0.1 ? (long)(task.mOffset / elapsed) : 0;
-                    task.mDispatcher.Invoke(new Action(() => {
+                    task.mDispatcher.BeginInvoke(new Action(() => {
                         task.Progress?.Invoke(task, new ProgressEventArgs(Percent, speed));
                     }));
                 }
 
-                // setup next read
                 task.streamResponse.BeginRead(task.BufferRead, 0, BUFFER_SIZE, new AsyncCallback(ReadCallBack), task);
                 return;
             }
             else
             {
-                // this is done on finisch
-                //task.streamWriter.Close();
-                //task.streamResponse.Close();
                 Success = 1;
             }
-
         }
         catch (Exception e)
         {
             ErrCode = -3;
             Error = e;
-            Console.WriteLine("\nReadCallBack Exception raised!");
-            Console.WriteLine("\nMessage:{0}", e.Message);
+            AppLog.Line("Download read error: {0}", e.Message);
         }
         task.mDispatcher.Invoke(new Action(() => {
             task.Finish(Success, ErrCode, Error);
@@ -335,7 +266,7 @@ class HttpTask
         {
             if (Error != null)
                 return Error.ToString();
-            switch(ErrCode)
+            switch (ErrCode)
             {
                 case 0: return "Ok";
                 case -1: return "Canceled";
