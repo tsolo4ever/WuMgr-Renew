@@ -1,157 +1,205 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Threading;
-
 
 class HttpTask
 {
-    const int BUFFER_SIZE = 65536;
-    const int MAX_RETRIES = 3;
+    const int BUFFER_SIZE    = 65536;
+    const int MAX_RETRIES    = 3;
+    const int READ_TIMEOUT_MS = 30_000;
 
-    private byte[] BufferRead;
-    private HttpWebRequest request;
-    private HttpWebResponse response;
-    private Stream streamResponse;
-    private Stream streamWriter;
-    private Dispatcher mDispatcher;
-    private string mUrl;
-    private string mDlPath;
-    private string mDlName;
-    private long mLength = -1;
-    private long mOffset = -1;
-    private long mResumeOffset = 0;
-    private int mRetryCount = 0;
-    private int mOldPercent = -1;
-    private bool Canceled = false;
-    private DateTime lastTime;
-    private DateTime mStartTime;
+    private static readonly HttpClient sClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
-    public string DlPath { get { return mDlPath; } }
-    public string DlName { get { return mDlName; } }
+    private readonly string     mUrl;
+    private readonly string     mDlPath;
+    private          string     mDlName;
+    private          int        mRetryCount;
+    private          CancellationTokenSource _cts;
+    private readonly Dispatcher mDispatcher;
 
-    public HttpTask(string Url, string DlPath, string DlName = null, bool Update = false)
+    public string DlPath => mDlPath;
+    public string DlName => mDlName;
+
+    public HttpTask(string url, string dlPath, string dlName = null, bool update = false)
     {
-        mUrl = Url;
-        mDlPath = DlPath;
-        mDlName = DlName;
+        mUrl        = url;
+        mDlPath     = dlPath;
+        mDlName     = dlName;
         mDispatcher = Dispatcher.CurrentDispatcher;
     }
 
     public bool Start()
     {
-        mRetryCount = 0;
-        Canceled = false;
-        return StartDownload();
-    }
-
-    private bool StartDownload()
-    {
-        if (Canceled)
+        if (!Uri.TryCreate(mUrl, UriKind.Absolute, out Uri uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            AppLog.Line("Download rejected, invalid URL scheme: {0}", mUrl);
             return false;
-        try
-        {
-            if (!Uri.TryCreate(mUrl, UriKind.Absolute, out Uri uri) ||
-                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-            {
-                AppLog.Line("Download rejected, invalid URL scheme: {0}", mUrl);
-                return false;
-            }
-
-            mResumeOffset = 0;
-            if (mDlName != null)
-            {
-                var tmpInfo = new FileInfo(Path.Combine(mDlPath, mDlName + ".tmp"));
-                if (tmpInfo.Exists && tmpInfo.Length > 0)
-                    mResumeOffset = tmpInfo.Length;
-            }
-
-            request = (HttpWebRequest)WebRequest.Create(uri);
-            if (mResumeOffset > 0)
-            {
-                request.AddRange(mResumeOffset);
-                AppLog.Line("Resuming download from byte {0}: {1}", mResumeOffset, mUrl);
-            }
-
-            BufferRead = new byte[BUFFER_SIZE];
-            mOffset = mResumeOffset;
-            mOldPercent = -1;
-            request.BeginGetResponse(new AsyncCallback(RespCallback), this);
-            return true;
         }
-        catch (Exception e)
-        {
-            AppLog.Line("Download start failed: {0}", e.Message);
-        }
-        return false;
+        mRetryCount = 0;
+        _cts = new CancellationTokenSource();
+        _ = RunAsync(uri, _cts.Token);
+        return true;
     }
 
-    public void Cancel()
-    {
-        Canceled = true;
-        if (request != null)
-            request.Abort();
-    }
+    public void Cancel() => _cts?.Cancel();
 
-    private void CloseStreams()
+    private async Task RunAsync(Uri uri, CancellationToken ct)
     {
-        try { streamResponse?.Close(); } catch { }
-        try { streamWriter?.Close(); } catch { }
-        try { response?.Close(); } catch { }
-        streamResponse = null;
-        streamWriter = null;
-        response = null;
-        request = null;
-        BufferRead = null;
-    }
-
-    private void Finish(int Success, int ErrCode, Exception Error = null)
-    {
-        CloseStreams();
-
-        if (Success == 1)
+        while (true)
         {
             try
             {
-                File.Move(Path.Combine(mDlPath, mDlName + ".tmp"), Path.Combine(mDlPath, mDlName), overwrite: true);
+                await DownloadOnceAsync(uri, ct);
+                return;
             }
-            catch
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                AppLog.Line("Failed to rename download {0}", Path.Combine(mDlPath, mDlName + ".tmp"));
-                mDlName += ".tmp";
+                AppLog.Line("Download cancelled: {0}", mUrl);
+                FireFinished(-1, null);
+                return;
             }
+            catch (Exception e) when (!ct.IsCancellationRequested)
+            {
+                if (mRetryCount >= MAX_RETRIES)
+                {
+                    AppLog.Line("Download failed after {0} retries: {1}", MAX_RETRIES, e.Message);
+                    FireFinished(-2, e);
+                    return;
+                }
+                mRetryCount++;
+                AppLog.Line("Download error, retrying ({0}/{1}): {2}", mRetryCount, MAX_RETRIES, e.Message);
+            }
+        }
+    }
 
+    private async Task DownloadOnceAsync(Uri uri, CancellationToken ct)
+    {
+        // Check for a partial file to resume
+        long resumeOffset = 0;
+        if (mDlName != null)
+        {
+            var tmp = new FileInfo(Path.Combine(mDlPath, mDlName + ".tmp"));
+            if (tmp.Exists && tmp.Length > 0)
+                resumeOffset = tmp.Length;
+        }
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, uri);
+        if (resumeOffset > 0)
+        {
+            req.Headers.Range = new RangeHeaderValue(resumeOffset, null);
+            AppLog.Line("Resuming download from byte {0}: {1}", resumeOffset, mUrl);
+        }
+
+        using var resp = await sClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+        bool isPartial = resp.StatusCode == HttpStatusCode.PartialContent;
+        if (resumeOffset > 0 && !isPartial)
+        {
+            AppLog.Line("Server does not support resume, restarting: {0}", mUrl);
+            resumeOffset = 0;
+        }
+
+        long? contentLen  = resp.Content.Headers.ContentLength;
+        long  totalLength = contentLen.HasValue
+            ? (isPartial ? resumeOffset + contentLen.Value : contentLen.Value)
+            : -1;
+
+        DateTime lastTime = resp.Content.Headers.LastModified?.LocalDateTime ?? DateTime.Now;
+
+        if (mDlName == null)
+        {
+            string fn = resp.Content.Headers.ContentDisposition?.FileNameStar
+                     ?? resp.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                     ?? Path.GetFileName(resp.RequestMessage?.RequestUri?.AbsolutePath ?? "");
+            mDlName = string.IsNullOrEmpty(fn) || fn[0] == '?'
+                ? GetNextTempFile(mDlPath, "Download") : fn;
+        }
+
+        // Skip re-download if file is already complete
+        if (!isPartial && totalLength > 0)
+        {
+            var existing = new FileInfo(Path.Combine(mDlPath, mDlName));
+            if (existing.Exists && existing.Length == totalLength && existing.LastWriteTime == lastTime)
+            {
+                AppLog.Line("File already downloaded: {0}", Path.Combine(mDlPath, mDlName));
+                FireFinished(0, null);
+                return;
+            }
+        }
+
+        Directory.CreateDirectory(mDlPath);
+
+        string tmpPath = Path.Combine(mDlPath, mDlName + ".tmp");
+        using var src = await resp.Content.ReadAsStreamAsync(ct);
+        using var dst = isPartial && File.Exists(tmpPath)
+            ? new FileStream(tmpPath, FileMode.Append, FileAccess.Write)
+            : new FileStream(tmpPath, FileMode.Create,  FileAccess.Write);
+
+        var  buf    = new byte[BUFFER_SIZE];
+        long offset = resumeOffset;
+        int  oldPct = -1;
+        var  sw     = Stopwatch.StartNew();
+
+        while (true)
+        {
+            int read;
+            using (var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                readCts.CancelAfter(READ_TIMEOUT_MS);
+                try
+                {
+                    read = await src.ReadAsync(buf, 0, BUFFER_SIZE, readCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"Read stalled for {READ_TIMEOUT_MS / 1000}s");
+                }
+            }
+            if (read == 0) break;
+
+            await dst.WriteAsync(buf, 0, read, ct);
+            offset += read;
+
+            int pct = totalLength > 0 ? (int)(100L * offset / totalLength) : -1;
+            if (pct != oldPct)
+            {
+                oldPct = pct;
+                long speed = sw.Elapsed.TotalSeconds > 0.1
+                    ? (long)((offset - resumeOffset) / sw.Elapsed.TotalSeconds) : 0;
+                int p = pct; long s = speed;
+                _ = mDispatcher.BeginInvoke(new Action(() => Progress?.Invoke(this, new ProgressEventArgs(p, s))));
+            }
+        }
+
+        // Atomic rename .tmp -> final
+        try
+        {
+            File.Move(tmpPath, Path.Combine(mDlPath, mDlName), overwrite: true);
             try { File.SetLastWriteTime(Path.Combine(mDlPath, mDlName), lastTime); } catch { }
         }
-        else if (Success == 2)
+        catch
         {
-            AppLog.Line("File already downloaded {0}", Path.Combine(mDlPath, mDlName));
-        }
-        else
-        {
-            try { File.Delete(Path.Combine(mDlPath, mDlName + ".tmp")); } catch { }
-            AppLog.Line("Failed to download file {0}", Path.Combine(mDlPath, mDlName));
+            AppLog.Line("Failed to rename download: {0}", tmpPath);
+            mDlName += ".tmp";
         }
 
-        Finished?.Invoke(this, new FinishedEventArgs(Success > 0 ? 0 : Canceled ? -1 : ErrCode, Error));
+        FireFinished(0, null);
     }
 
-    private bool RetryOrFail(int ErrCode, Exception Error)
-    {
-        if (!Canceled && mRetryCount < MAX_RETRIES)
-        {
-            mRetryCount++;
-            AppLog.Line("Download error, retrying ({0}/{1}): {2}", mRetryCount, MAX_RETRIES, Error?.Message);
-            CloseStreams();
-            mDispatcher.BeginInvoke(new Action(() => {
-                if (!Canceled) StartDownload();
-            }));
-            return true;
-        }
-        return false;
-    }
+    private void FireFinished(int errCode, Exception error) =>
+        mDispatcher.BeginInvoke(new Action(() => Finished?.Invoke(this, new FinishedEventArgs(errCode, error))));
 
-    static public string GetNextTempFile(string path, string baseName)
+    public static string GetNextTempFile(string path, string baseName)
     {
         for (int i = 0; i < 10000; i++)
         {
@@ -161,195 +209,26 @@ class HttpTask
         return baseName;
     }
 
-    private static void RespCallback(IAsyncResult asynchronousResult)
-    {
-        int Success = 0;
-        int ErrCode = 0;
-        Exception Error = null;
-        HttpTask task = (HttpTask)asynchronousResult.AsyncState;
-        try
-        {
-            task.response = (HttpWebResponse)task.request.EndGetResponse(asynchronousResult);
-            bool isPartial = task.response.StatusCode == HttpStatusCode.PartialContent;
-            ErrCode = (int)task.response.StatusCode;
-
-            string fileName = Path.GetFileName(task.response.ResponseUri.ToString());
-            task.lastTime = DateTime.Now;
-
-            foreach (string key in task.response.Headers.AllKeys)
-            {
-                if (key.Equals("Content-Length", StringComparison.CurrentCultureIgnoreCase))
-                {
-                    if (long.TryParse(task.response.Headers[key], out long len))
-                        task.mLength = isPartial ? task.mResumeOffset + len : len;
-                }
-                else if (key.Equals("Content-Disposition", StringComparison.CurrentCultureIgnoreCase))
-                {
-                    string cd = task.response.Headers[key];
-                    int idx = cd.IndexOf("filename=");
-                    if (idx >= 0)
-                        fileName = Path.GetFileName(cd.Substring(idx + 9).Replace("\"", ""));
-                }
-                else if (key.Equals("Last-Modified", StringComparison.CurrentCultureIgnoreCase))
-                {
-                    if (DateTime.TryParse(task.response.Headers[key], out DateTime dt))
-                        task.lastTime = dt;
-                }
-            }
-
-            if (task.mDlName == null)
-                task.mDlName = fileName;
-
-            // Server ignored Range request — restart from scratch
-            if (task.mResumeOffset > 0 && !isPartial)
-            {
-                AppLog.Line("Server does not support resume, restarting: {0}", task.mUrl);
-                task.mResumeOffset = 0;
-                task.mOffset = 0;
-            }
-
-            FileInfo testInfo = new FileInfo(Path.Combine(task.mDlPath, task.mDlName));
-            if (!isPartial && testInfo.Exists && testInfo.LastWriteTime == task.lastTime && testInfo.Length == task.mLength)
-            {
-                task.request.Abort();
-                Success = 2;
-            }
-            else
-            {
-                if (!Directory.Exists(task.mDlPath))
-                    Directory.CreateDirectory(task.mDlPath);
-                if (task.mDlName.Length == 0 || task.mDlName[0] == '?')
-                    task.mDlName = GetNextTempFile(task.mDlPath, "Download");
-
-                FileInfo info = new FileInfo(Path.Combine(task.mDlPath, task.mDlName + ".tmp"));
-                if (isPartial && info.Exists)
-                    task.streamWriter = info.Open(FileMode.Append, FileAccess.Write);
-                else
-                {
-                    if (info.Exists) info.Delete();
-                    task.streamWriter = info.OpenWrite();
-                }
-
-                task.streamResponse = task.response.GetResponseStream();
-                task.mStartTime = DateTime.Now;
-
-                task.streamResponse.BeginRead(task.BufferRead, 0, BUFFER_SIZE, new AsyncCallback(ReadCallBack), task);
-                return;
-            }
-        }
-        catch (WebException e)
-        {
-            if (e.Response != null)
-            {
-                string fileName = Path.GetFileName(e.Response.ResponseUri.AbsolutePath.ToString());
-                if (task.mDlName == null)
-                    task.mDlName = fileName;
-
-                FileInfo testInfo = new FileInfo(Path.Combine(task.mDlPath, task.mDlName));
-                if (testInfo.Exists)
-                    Success = 2;
-            }
-
-            if (Success == 0)
-            {
-                if (task.RetryOrFail(-2, e)) return;
-                ErrCode = -2;
-                Error = e;
-                AppLog.Line("Download error: {0} ({1})", e.Message, e.Status);
-            }
-        }
-        catch (Exception e)
-        {
-            if (task.RetryOrFail(-2, e)) return;
-            ErrCode = -2;
-            Error = e;
-            AppLog.Line("Download error: {0}", e.Message);
-        }
-        task.mDispatcher.Invoke(new Action(() => {
-            task.Finish(Success, ErrCode, Error);
-        }));
-    }
-
-    private static void ReadCallBack(IAsyncResult asyncResult)
-    {
-        int Success = 0;
-        int ErrCode = 0;
-        Exception Error = null;
-        HttpTask task = (HttpTask)asyncResult.AsyncState;
-        try
-        {
-            int read = task.streamResponse.EndRead(asyncResult);
-            if (read > 0)
-            {
-                task.streamWriter.Write(task.BufferRead, 0, read);
-                task.mOffset += read;
-
-                int Percent = task.mLength > 0 ? (int)(100L * task.mOffset / task.mLength) : -1;
-                if (Percent != task.mOldPercent)
-                {
-                    task.mOldPercent = Percent;
-                    double elapsed = (DateTime.Now - task.mStartTime).TotalSeconds;
-                    long speed = elapsed > 0.1 ? (long)((task.mOffset - task.mResumeOffset) / elapsed) : 0;
-                    task.mDispatcher.BeginInvoke(new Action(() => {
-                        task.Progress?.Invoke(task, new ProgressEventArgs(Percent, speed));
-                    }));
-                }
-
-                task.streamResponse.BeginRead(task.BufferRead, 0, BUFFER_SIZE, new AsyncCallback(ReadCallBack), task);
-                return;
-            }
-            else
-            {
-                Success = 1;
-            }
-        }
-        catch (Exception e)
-        {
-            if (task.RetryOrFail(-3, e)) return;
-            ErrCode = -3;
-            Error = e;
-            AppLog.Line("Download read error: {0}", e.Message);
-        }
-        task.mDispatcher.Invoke(new Action(() => {
-            task.Finish(Success, ErrCode, Error);
-        }));
-    }
+    // ── Event args ────────────────────────────────────────────────────────────
 
     public class FinishedEventArgs : EventArgs
     {
-        public FinishedEventArgs(int ErrCode = 0, Exception Error = null)
-        {
-            this.ErrCode = ErrCode;
-            this.Error = Error;
-        }
-        public string GetError()
-        {
-            if (Error != null)
-                return Error.ToString();
-            switch (ErrCode)
-            {
-                case 0: return "Ok";
-                case -1: return "Canceled";
-                default: return ErrCode.ToString();
-            }
-        }
-        public bool Success { get { return ErrCode == 0; } }
-        public bool Cancelled { get { return ErrCode == -1; } }
-
-        public int ErrCode = 0;
-        public Exception Error = null;
+        public FinishedEventArgs(int errCode = 0, Exception error = null) { ErrCode = errCode; Error = error; }
+        public string GetError() => Error != null ? Error.ToString()
+            : ErrCode switch { 0 => "Ok", -1 => "Canceled", _ => ErrCode.ToString() };
+        public bool      Success   => ErrCode == 0;
+        public bool      Cancelled => ErrCode == -1;
+        public int       ErrCode;
+        public Exception Error;
     }
-    public event EventHandler<FinishedEventArgs> Finished;
 
     public class ProgressEventArgs : EventArgs
     {
-        public ProgressEventArgs(int Percent, long Speed = 0)
-        {
-            this.Percent = Percent;
-            this.Speed = Speed;
-        }
-        public int Percent = 0;
-        public long Speed = 0; // bytes per second
+        public ProgressEventArgs(int percent, long speed = 0) { Percent = percent; Speed = speed; }
+        public int  Percent;
+        public long Speed; // bytes/s
     }
+
+    public event EventHandler<FinishedEventArgs> Finished;
     public event EventHandler<ProgressEventArgs> Progress;
 }

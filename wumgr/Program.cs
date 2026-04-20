@@ -153,6 +153,8 @@ namespace wumgr
 
             AppLog.Line("Working Directory: {0}", wrkPath);
 
+            LoadSettings();
+
             Agent = new WuAgent();
 
             ExecOnStart();
@@ -162,7 +164,7 @@ namespace wumgr
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            string colorMode = IniReadValue("Options", "ColorMode", "system");
+            string colorMode = Settings.ColorMode;
             if (colorMode.Equals("dark", StringComparison.OrdinalIgnoreCase))
                 Application.SetColorMode(SystemColorMode.Dark);
             else if (colorMode.Equals("classic", StringComparison.OrdinalIgnoreCase))
@@ -257,6 +259,102 @@ namespace wumgr
 
         }
 
+        // ── Typed application settings ────────────────────────────────────────────
+
+        public class AppSettings
+        {
+            // General
+            public string ColorMode       { get; set; } = "system";
+            public int    AutoUpdate      { get; set; } = 0;
+            public bool   Offline         { get; set; } = false;
+            public bool   Download        { get; set; } = true;
+            public bool   Manual          { get; set; } = false;
+            public int    IdleDelay       { get; set; } = 20;
+            public string Lang            { get; set; } = "";
+            public bool   LoadLists       { get; set; } = false;
+            public string OfflineCab      { get; set; } = "";
+            public bool   Refresh         { get; set; } = false;
+            public bool   IncludeOld      { get; set; } = false;
+            public bool   GroupUpdates    { get; set; } = true;
+            public string Source          { get; set; } = "Windows Update";
+            public string LastCheck       { get; set; } = "";
+
+            // Auto-check schedule
+            public int  ScheduleHour      { get; set; } = 12;
+            public int  ScheduleWeekDay   { get; set; } = 1;
+            public int  ScheduleMonthDay  { get; set; } = 1;
+
+            // WiFi
+            public bool   WifiAutoConnect    { get; set; } = false;
+            public bool   WifiAutoDisconnect { get; set; } = true;
+            public string WifiProfile        { get; set; } = "";
+        }
+
+        public static AppSettings Settings { get; private set; } = new AppSettings();
+
+        private static readonly System.Text.Json.JsonSerializerOptions sJsonOpts =
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+
+        private static string GetJsonSettingsPath() => Path.Combine(wrkPath, "wumgr.json");
+
+        public static void LoadSettings()
+        {
+            string path = GetJsonSettingsPath();
+            if (System.IO.File.Exists(path))
+            {
+                try
+                {
+                    Settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+                        System.IO.File.ReadAllText(path)) ?? new AppSettings();
+                    return;
+                }
+                catch (Exception e) { AppLog.Line("Failed to load settings: {0}", e.Message); }
+            }
+            MigrateSettingsFromIni();
+        }
+
+        public static void SaveSettings()
+        {
+            try
+            {
+                Directory.CreateDirectory(wrkPath);
+                System.IO.File.WriteAllText(GetJsonSettingsPath(),
+                    System.Text.Json.JsonSerializer.Serialize(Settings, sJsonOpts));
+            }
+            catch (Exception e) { AppLog.Line("Failed to save settings: {0}", e.Message); }
+        }
+
+        private static void MigrateSettingsFromIni()
+        {
+            if (!System.IO.File.Exists(GetINIPath())) return;
+            AppLog.Line("Migrating settings from wumgr.ini to wumgr.json");
+            Settings = new AppSettings();
+            string r(string k, string d = "") => IniReadValue("Options", k, d);
+            Settings.ColorMode          = r("ColorMode", "system");
+            Settings.AutoUpdate         = MiscFunc.parseInt(r("AutoUpdate", "0"));
+            Settings.Offline            = r("Offline", "0") != "0";
+            Settings.Download           = r("Download", "1") != "0";
+            Settings.Manual             = r("Manual", "0")  != "0";
+            Settings.IdleDelay          = MiscFunc.parseInt(r("IdleDelay", "20"));
+            Settings.Lang               = r("Lang", "");
+            Settings.LoadLists          = r("LoadLists", "0") != "0";
+            Settings.OfflineCab         = r("OfflineCab", "");
+            Settings.Refresh            = r("Refresh", "0") != "0";
+            Settings.IncludeOld         = r("IncludeOld", "0") != "0";
+            Settings.GroupUpdates       = r("GroupUpdates", "1") != "0";
+            Settings.Source             = r("Source", "Windows Update");
+            Settings.LastCheck          = r("LastCheck", "");
+            Settings.ScheduleHour       = MiscFunc.parseInt(r("AutoCheckHour", "12"));
+            Settings.ScheduleWeekDay    = MiscFunc.parseInt(r("AutoCheckWeekDay", "1"));
+            Settings.ScheduleMonthDay   = MiscFunc.parseInt(r("AutoCheckMonthDay", "1"));
+            Settings.WifiAutoConnect    = IniReadValue("WiFi", "AutoConnect",    "0") != "0";
+            Settings.WifiAutoDisconnect = IniReadValue("WiFi", "AutoDisconnect", "1") != "0";
+            Settings.WifiProfile        = IniReadValue("WiFi", "Profile", "");
+            SaveSettings();
+        }
+
+        // ── Legacy INI P/Invoke (kept for external files: Tools.ini, translations, KB lists) ──
+
         [DllImport("kernel32")]
         private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
         public static void IniWriteValue(string Section, string Key, string Value, string INIPath = null)
@@ -278,6 +376,13 @@ namespace wumgr
             char[] chars = new char[8193];
             int size = GetPrivateProfileString(null, null, null, chars, 8193, INIPath != null ? INIPath : GetINIPath());
             return new String(chars, 0, size).Split('\0');
+        }
+
+        private static string[] IniEnumKeys(string section, string INIPath = null)
+        {
+            char[] chars = new char[8193];
+            int size = GetPrivateProfileString(section, null, null, chars, 8193, INIPath ?? GetINIPath());
+            return new String(chars, 0, size).Split('\0').Where(s => s.Length > 0).ToArray();
         }
 
         public static bool TestArg(string name)

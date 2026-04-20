@@ -70,7 +70,7 @@ namespace wumgr
 
             mUpdateServiceManager = new UpdateServiceManager();
 
-            if(MiscFunc.parseInt(Program.IniReadValue("Options", "LoadLists", "0")) != 0)
+            if(Program.Settings.LoadLists)
                 LoadUpdates();
         }
 
@@ -363,7 +363,8 @@ namespace wumgr
 
                 List<UpdateDownloader.Task> downloads = new List<UpdateDownloader.Task>();
                 UpdateDownloader.Task download = new UpdateDownloader.Task();
-                download.Url = Program.IniReadValue("Options", "OfflineCab", "http://go.microsoft.com/fwlink/p/?LinkID=74689");
+                string cab = Program.Settings.OfflineCab;
+                download.Url = cab.Length > 0 ? cab : "http://go.microsoft.com/fwlink/p/?LinkID=74689";
                 download.Path = dlPath;
                 download.FileName = "wsusscn2.cab";
                 downloads.Add(download); 
@@ -1096,6 +1097,7 @@ namespace wumgr
                 await sStoreLock.WaitAsync();
                 try
                 {
+                    Directory.CreateDirectory(dlPath);
                     File.WriteAllText(tmpPath, JsonSerializer.Serialize(snapshot, sJsonOptions));
                     File.Move(tmpPath, jsonPath, overwrite: true);
                     FileOps.DeleteFile(iniPath);
@@ -1247,7 +1249,7 @@ namespace wumgr
             {
                 // !!! warning this function is invoced from a different thread !!!            
                 agent.mDispatcher.Invoke(new Action(() => {
-                    agent.OnUpdatesDownloaded(downloadJob, downloadJob.AsyncState);
+                    agent.OnUpdatesDownloaded(downloadJob, downloadJob.AsyncState as List<MsUpdate>);
                 }));
             }
 
@@ -1266,7 +1268,7 @@ namespace wumgr
             {
                 // !!! warning this function is invoced from a different thread !!!            
                 agent.mDispatcher.Invoke(new Action(() => {
-                    agent.OnInstalationCompleted(installationJob, installationJob.AsyncState);
+                    agent.OnInstalationCompleted(installationJob, installationJob.AsyncState as List<MsUpdate>);
                 }));
             }
         }

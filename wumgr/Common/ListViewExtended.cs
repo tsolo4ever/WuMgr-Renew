@@ -17,6 +17,14 @@ namespace wumgr
         [DllImport("User32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
+
+        public void SetDarkMode(bool dark)
+        {
+            SetWindowTheme(Handle, dark ? "DarkMode_Explorer" : "Explorer", null);
+        }
+
         private static int? GetGroupID(ListViewGroup lstvwgrp)
         {
             PropertyInfo pi = lstvwgrp.GetType().GetProperty("ID", BindingFlags.NonPublic | BindingFlags.Instance);

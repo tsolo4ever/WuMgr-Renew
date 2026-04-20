@@ -1,4 +1,6 @@
-﻿using System;
+﻿#pragma warning disable CA1416 // Validate platform compatibility
+
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
@@ -59,6 +61,10 @@ namespace wumgr
         private static extern bool DestroyMenu(IntPtr hMenu);
         [DllImport("user32.dll")]
         private static extern uint CheckMenuItem(IntPtr hMenu, int uIDCheckItem, int uCheck);
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
+        [DllImport("uxtheme.dll", EntryPoint = "#135")]
+        private static extern int SetPreferredAppMode(int mode); // 0=Default, 2=ForceDark
 
         protected override void WndProc(ref Message msg)
         {
@@ -80,6 +86,13 @@ namespace wumgr
         void LineLogger(object sender, AppLog.LogEventArgs args)
         {
             logBox.AppendText(args.line + Environment.NewLine);
+            int lineCount = logBox.Lines.Length;
+            if (lineCount > 500)
+            {
+                int cut = logBox.GetFirstCharIndexFromLine(lineCount - 500);
+                logBox.Select(0, cut);
+                logBox.SelectedText = "";
+            }
             logBox.ScrollToCaret();
         }
 
@@ -145,12 +158,11 @@ namespace wumgr
             if (Program.TestArg("-tray"))
                 allowshowdisplay = false;
 
-            if(!MiscFunc.IsRunningAsUwp())
+            if (!MiscFunc.IsRunningAsUwp())
                 this.Text = string.Format("{0} v{1}", Program.mName, Program.mVersion);
 
             Localize();
 
-            lblPatreon.Visible = false;
 
             btnSearch.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.available_updates, new Size(25, 25)));
             btnInstall.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.software_installer, new Size(25, 25)));
@@ -160,10 +172,10 @@ namespace wumgr
             btnGetLink.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.link, new Size(25, 25)));
             btnCancel.Image = (Image)(new Bitmap(global::wumgr.Properties.Resources.cancel, new Size(25, 25)));
 
-            mTrayIconNone        = global::wumgr.Properties.Resources.tray_none;
-            mTrayIconDriver      = global::wumgr.Properties.Resources.tray_driver;
+            mTrayIconNone = global::wumgr.Properties.Resources.tray_none;
+            mTrayIconDriver = global::wumgr.Properties.Resources.tray_driver;
             mTrayIconNonCritical = global::wumgr.Properties.Resources.tray_noncritical;
-            mTrayIconSecurity    = global::wumgr.Properties.Resources.tray_security;
+            mTrayIconSecurity = global::wumgr.Properties.Resources.tray_security;
             notifyIcon.Icon = mTrayIconNone;
             this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
@@ -225,9 +237,11 @@ namespace wumgr
                 case GPO.AUOptions.Download: radDownload.Checked = true; break;
                 case GPO.AUOptions.Scheduled: radSchedule.Checked = true; break;
             }
-            try{
+            try
+            {
                 dlShDay.SelectedIndex = day; dlShTime.SelectedIndex = time;
-            }catch{ }
+            }
+            catch { }
 
             if (mWinVersion >= 10) // 10 or abive
                 chkDisableAU.Checked = GPO.GetDisableAU();
@@ -236,23 +250,25 @@ namespace wumgr
                 chkStore.Enabled = false;
             chkStore.Checked = GPO.GetStoreAU();
 
-            try{
-                dlAutoCheck.SelectedIndex = MiscFunc.parseInt(GetConfig("AutoUpdate", "0"));
-            }catch{ }
+            try
+            {
+                dlAutoCheck.SelectedIndex = Cfg.AutoUpdate;
+            }
+            catch { }
             chkAutoRun.Checked = Program.IsAutoStart();
             if (MiscFunc.IsRunningAsUwp() && chkAutoRun.CheckState == CheckState.Checked)
                 chkAutoRun.Enabled = false;
-            IdleDelay = MiscFunc.parseInt(GetConfig("IdleDelay", "20"));
+            IdleDelay = Cfg.IdleDelay;
             chkNoUAC.Checked = Program.IsSkipUacRun();
             chkNoUAC.Enabled = MiscFunc.IsAdministrator();
             chkNoUAC.Visible = chkNoUAC.Enabled || chkNoUAC.Checked || !MiscFunc.IsRunningAsUwp();
 
 
-            chkOffline.Checked = MiscFunc.parseInt(GetConfig("Offline", "0")) != 0;
-            chkDownload.Checked = MiscFunc.parseInt(GetConfig("Download", "1")) != 0;
-            chkManual.Checked = MiscFunc.parseInt(GetConfig("Manual", "0")) != 0;
+            chkOffline.Checked = Cfg.Offline;
+            chkDownload.Checked = Cfg.Download;
+            chkManual.Checked = Cfg.Manual;
 
-            string savedMode = GetConfig("ColorMode", "system");
+            string savedMode = Cfg.ColorMode;
             dlColorMode.SelectedIndex = savedMode.Equals("classic", StringComparison.OrdinalIgnoreCase) ? 1
                 : savedMode.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
 
@@ -277,8 +293,8 @@ namespace wumgr
                     ctl.Enabled = false;
             }
 
-            chkOld.Checked = MiscFunc.parseInt(GetConfig("IncludeOld", "0")) != 0;
-            string source = GetConfig("Source", "Windows Update");
+            chkOld.Checked = Cfg.IncludeOld;
+            string source = Cfg.Source;
 
             string Online = Program.GetArg("-online");
             if (Online != null)
@@ -301,10 +317,13 @@ namespace wumgr
             if (Program.TestArg("-manual"))
                 chkManual.Checked = true;
 
-            try {
-                LastCheck = DateTime.Parse(GetConfig("LastCheck", ""));
+            try
+            {
+                LastCheck = DateTime.Parse(Cfg.LastCheck);
                 AppLog.Line("Last Checked for updates: {0}", LastCheck.ToString(CultureInfo.CurrentUICulture.DateTimeFormat.ShortDatePattern));
-            } catch {
+            }
+            catch
+            {
                 LastCheck = DateTime.Now;
             }
 
@@ -313,7 +332,7 @@ namespace wumgr
             mSearchBoxHeight = this.panelList.RowStyles[2].Height;
             this.panelList.RowStyles[2].Height = 0;
 
-            chkGrupe.Checked = MiscFunc.parseInt(GetConfig("GroupUpdates", "1")) != 0;
+            chkGrupe.Checked = Cfg.GroupUpdates;
             updateView.ShowGroups = chkGrupe.Checked;
 
             mSuspendUpdate = false;
@@ -331,7 +350,8 @@ namespace wumgr
             ContextMenuStrip trayMenu = new ContextMenuStrip();
             tsReboot = new ToolStripMenuItem("Restart Now");
             tsReboot.Font = new System.Drawing.Font(tsReboot.Font, System.Drawing.FontStyle.Bold);
-            tsReboot.Click += (s, e) => {
+            tsReboot.Click += (s, e) =>
+            {
                 if (MessageBox.Show("Restart now to finish installing updates?", Program.mName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     var psi = new ProcessStartInfo("shutdown.exe");
@@ -347,9 +367,12 @@ namespace wumgr
             tsRebootSep = new ToolStripSeparator();
             tsRebootSep.Visible = false;
             ToolStripMenuItem tsOpen = new ToolStripMenuItem("Open WuMgr");
-            tsOpen.Click += (s, e) => { allowshowdisplay = true; this.Show();
+            tsOpen.Click += (s, e) =>
+            {
+                allowshowdisplay = true; this.Show();
                 if (this.WindowState == FormWindowState.Minimized) this.WindowState = FormWindowState.Normal;
-                SetForegroundWindow(this.Handle); };
+                SetForegroundWindow(this.Handle);
+            };
             ToolStripMenuItem tsCheck = new ToolStripMenuItem("Check for Updates");
             tsCheck.Click += (s, e) => { allowshowdisplay = true; this.Show(); btnSearch_Click(s, e); };
             ToolStripMenuItem tsAbout = new ToolStripMenuItem(Translate.fmt("menu_about"));
@@ -365,6 +388,7 @@ namespace wumgr
             mBlinkTimer.Tick += BlinkTick;
 
             BuildWifiTab();
+            BuildScheduleControls();
 
             IntPtr MenuHandle = GetSystemMenu(this.Handle, false); // Note: to restore default set true
             InsertMenu(MenuHandle, 5, MF_BYPOSITION | MF_SEPARATOR, 0, string.Empty);
@@ -386,10 +410,11 @@ namespace wumgr
             Program.ipc.Listen();
 
             // Apply dark visual styles after all handles are created; load history off the UI thread
-            this.Shown += async (s, e) => {
+            this.Shown += async (s, e) =>
+            {
                 try
                 {
-                    if (GetConfig("ColorMode", "system").Equals("dark", StringComparison.OrdinalIgnoreCase))
+                    if (Cfg.ColorMode.Equals("dark", StringComparison.OrdinalIgnoreCase))
                         ApplyControlTheme(this, true);
                     await agent.UpdateHistoryAsync();
                     UpdateCounts();
@@ -405,6 +430,9 @@ namespace wumgr
 
         private void ApplyControlTheme(Control parent, bool dark)
         {
+            if (parent == this)
+                SetPreferredAppMode(dark ? 2 : 0); // ForceDark / Default — makes native controls (ComboBox etc.) follow dark mode
+
             foreach (Control ctrl in parent.Controls)
             {
                 if (ctrl is CheckBox chk)
@@ -446,6 +474,7 @@ namespace wumgr
                     ll.BackColor = dark ? s_darkBg : SystemColors.Control;
                     ll.ForeColor = dark ? s_darkFg : SystemColors.ControlText;
                     ll.LinkColor = dark ? Color.FromArgb(100, 180, 255) : SystemColors.HotTrack;
+                    ll.ActiveLinkColor = dark ? Color.FromArgb(160, 220, 255) : Color.Red;
                     ll.VisitedLinkColor = dark ? Color.FromArgb(180, 120, 255) : Color.Purple;
                 }
                 else if (ctrl is Label lbl)
@@ -467,6 +496,12 @@ namespace wumgr
                 {
                     cb.BackColor = dark ? s_darkBg : SystemColors.Window;
                     cb.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                }
+                else if (ctrl is ListViewExtended lve)
+                {
+                    lve.BackColor = dark ? s_darkBg : SystemColors.Window;
+                    lve.ForeColor = dark ? s_darkFg : SystemColors.WindowText;
+                    lve.SetDarkMode(dark);
                 }
                 else if (ctrl is ListView lv)
                 {
@@ -500,12 +535,13 @@ namespace wumgr
         private static Timer mTimer = null;
         private bool doUpdte = false;
         private DateTime LastBaloon = DateTime.MinValue;
+        private DateTime mLastGetLink = DateTime.MinValue;
 
         private void OnTimedEvent(Object source, EventArgs e)
         {
             bool updateNow = false;
             if (notifyIcon.Visible)
-            { 
+            {
                 int daysDue = GetAutoUpdateDue();
                 if (daysDue != 0 && !agent.IsBusy())
                 {
@@ -516,7 +552,7 @@ namespace wumgr
                         AppLog.Line("Starting automatic search for updates.");
                         updateNow = true;
                     }
-                    else if(daysDue > GetGraceDays())
+                    else if (daysDue > GetGraceDays())
                     {
                         if (LastBaloon < DateTime.Now.AddHours(-4))
                         {
@@ -560,20 +596,54 @@ namespace wumgr
             this.Width = 900;
         }
 
+        private DateTime GetNextScheduledCheck()
+        {
+            int hour = GetScheduledHour();
+            switch (AutoUpdate)
+            {
+                case AutoUpdateOptions.EveryDay:
+                    {
+                        // Next occurrence of scheduled hour after LastCheck
+                        DateTime candidate = LastCheck.Date.AddHours(hour);
+                        if (candidate <= LastCheck) candidate = candidate.AddDays(1);
+                        return candidate;
+                    }
+                case AutoUpdateOptions.EveryWeek:
+                    {
+                        int targetDow = GetScheduledWeekDay();
+                        DateTime candidate = LastCheck.Date.AddHours(hour);
+                        // Advance to the target day of week
+                        int daysUntil = ((targetDow - (int)candidate.DayOfWeek) + 7) % 7;
+                        candidate = candidate.AddDays(daysUntil);
+                        if (candidate <= LastCheck) candidate = candidate.AddDays(7);
+                        return candidate;
+                    }
+                case AutoUpdateOptions.EveryMonth:
+                    {
+                        int targetDay = GetScheduledMonthDay(); // 1-28
+                        int y = LastCheck.Year, m = LastCheck.Month;
+                        int clamped = Math.Min(targetDay, DateTime.DaysInMonth(y, m));
+                        DateTime candidate = new DateTime(y, m, clamped).AddHours(hour);
+                        if (candidate <= LastCheck)
+                        {
+                            m++; if (m > 12) { m = 1; y++; }
+                            clamped = Math.Min(targetDay, DateTime.DaysInMonth(y, m));
+                            candidate = new DateTime(y, m, clamped).AddHours(hour);
+                        }
+                        return candidate;
+                    }
+                default:
+                    return DateTime.MaxValue;
+            }
+        }
+
         private int GetAutoUpdateDue()
         {
             try
             {
-                DateTime NextUpdate = DateTime.MaxValue;
-                switch (AutoUpdate)
-                {
-                    case AutoUpdateOptions.EveryDay: NextUpdate = LastCheck.AddDays(1); break;
-                    case AutoUpdateOptions.EveryWeek: NextUpdate = LastCheck.AddDays(7); break;
-                    case AutoUpdateOptions.EveryMonth: NextUpdate = LastCheck.AddMonths(1); break;
-                }
-                if (NextUpdate >= DateTime.Now)
-                    return 0;
-                return (int)Math.Ceiling((DateTime.Now - NextUpdate).TotalDays);
+                DateTime next = GetNextScheduledCheck();
+                if (next > DateTime.Now) return 0;
+                return Math.Max(1, (int)Math.Ceiling((DateTime.Now - next).TotalDays));
             }
             catch
             {
@@ -678,10 +748,10 @@ namespace wumgr
             if (mTrayIconNone == null) return; // not yet initialized
             switch (GetUpdatePriority())
             {
-                case TrayPriority.Security:    notifyIcon.Icon = mTrayIconSecurity;    break;
+                case TrayPriority.Security: notifyIcon.Icon = mTrayIconSecurity; break;
                 case TrayPriority.NonCritical: notifyIcon.Icon = mTrayIconNonCritical; break;
-                case TrayPriority.Driver:      notifyIcon.Icon = mTrayIconDriver;      break;
-                default:                       notifyIcon.Icon = mTrayIconNone;        break;
+                case TrayPriority.Driver: notifyIcon.Icon = mTrayIconDriver; break;
+                default: notifyIcon.Icon = mTrayIconNone; break;
             }
         }
 
@@ -696,10 +766,10 @@ namespace wumgr
         {
             return GetUpdatePriority() switch
             {
-                TrayPriority.Security    => mTrayIconSecurity,
+                TrayPriority.Security => mTrayIconSecurity,
                 TrayPriority.NonCritical => mTrayIconNonCritical,
-                TrayPriority.Driver      => mTrayIconDriver,
-                _                        => mTrayIconNone
+                TrayPriority.Driver => mTrayIconDriver,
+                _ => mTrayIconNone
             };
         }
 
@@ -726,22 +796,22 @@ namespace wumgr
             var tabWifi = new TabPage("WiFi");
             tabWifi.UseVisualStyleBackColor = false;
 
-            var gb = new GroupBox { Text = "WiFi for Updates", Location = new System.Drawing.Point(3, 3), Size = new System.Drawing.Size(165, 175) };
+            var gb = new GroupBox { Text = "WiFi for Updates", Location = new System.Drawing.Point(3, 3), Size = new System.Drawing.Size(172, 175) };
 
             var lblProfile = new Label { Text = "Profile:", AutoSize = true, Location = new System.Drawing.Point(6, 20) };
 
-            dlWifiProfile = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(6, 35), Size = new System.Drawing.Size(128, 21) };
+            dlWifiProfile = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(6, 35), Size = new System.Drawing.Size(135, 21) };
 
-            var btnRefresh = new Button { Text = "↻", Location = new System.Drawing.Point(136, 34), Size = new System.Drawing.Size(24, 23) };
+            var btnRefresh = new Button { Text = "↻", Location = new System.Drawing.Point(143, 34), Size = new System.Drawing.Size(24, 23) };
             btnRefresh.Click += (s, e) => RefreshWifiProfiles();
 
-            chkWifiConnect = new CheckBox { Text = "Connect before check", AutoSize = true, Location = new System.Drawing.Point(6, 64), UseVisualStyleBackColor = false };
-            chkWifiConnect.CheckedChanged += (s, e) => Program.IniWriteValue("WiFi", "AutoConnect", chkWifiConnect.Checked ? "1" : "0");
+            chkWifiConnect = new CheckBox { Text = "Connect before check/download", AutoSize = true, Location = new System.Drawing.Point(6, 64), UseVisualStyleBackColor = false };
+            chkWifiConnect.CheckedChanged += (s, e) => { Cfg.WifiAutoConnect = chkWifiConnect.Checked; SaveCfg(); };
 
             chkWifiDisconnect = new CheckBox { Text = "Disconnect after download", AutoSize = true, Location = new System.Drawing.Point(6, 84), UseVisualStyleBackColor = false };
-            chkWifiDisconnect.CheckedChanged += (s, e) => Program.IniWriteValue("WiFi", "AutoDisconnect", chkWifiDisconnect.Checked ? "1" : "0");
+            chkWifiDisconnect.CheckedChanged += (s, e) => { Cfg.WifiAutoDisconnect = chkWifiDisconnect.Checked; SaveCfg(); };
 
-            btnWifiNow = new Button { Text = "Connect Now", Location = new System.Drawing.Point(6, 108), Size = new System.Drawing.Size(153, 25) };
+            btnWifiNow = new Button { Text = "Connect Now", Location = new System.Drawing.Point(6, 108), Size = new System.Drawing.Size(160, 25) };
             btnWifiNow.Click += BtnWifiNow_Click;
 
             lblWifiStatus = new Label { Text = "", AutoSize = true, Location = new System.Drawing.Point(6, 140) };
@@ -751,22 +821,74 @@ namespace wumgr
             tabs.TabPages.Add(tabWifi);
 
             // Restore saved settings
-            chkWifiConnect.Checked    = MiscFunc.parseInt(Program.IniReadValue("WiFi", "AutoConnect",    "0")) != 0;
-            chkWifiDisconnect.Checked = MiscFunc.parseInt(Program.IniReadValue("WiFi", "AutoDisconnect", "1")) != 0;
-            string savedProfile = Program.IniReadValue("WiFi", "Profile", "");
+            chkWifiConnect.Checked = Cfg.WifiAutoConnect;
+            chkWifiDisconnect.Checked = Cfg.WifiAutoDisconnect;
+            string savedProfile = Cfg.WifiProfile;
 
             RefreshWifiProfiles();
 
             if (savedProfile.Length > 0 && dlWifiProfile.Items.Contains(savedProfile))
                 dlWifiProfile.SelectedItem = savedProfile;
 
-            dlWifiProfile.SelectedIndexChanged += (s, e) => {
+            dlWifiProfile.SelectedIndexChanged += (s, e) =>
+            {
                 if (dlWifiProfile.SelectedItem != null)
-                    Program.IniWriteValue("WiFi", "Profile", dlWifiProfile.SelectedItem.ToString());
+                    Cfg.WifiProfile = dlWifiProfile.SelectedItem.ToString(); SaveCfg();
             };
 
             UpdateWifiButton();
         }
+
+        private void BuildScheduleControls()
+        {
+            for (int h = 0; h < 24; h++)
+                dlScheduleHour.Items.Add(h == 0 ? "12:00 AM" : h < 12 ? $"{h}:00 AM" : h == 12 ? "12:00 PM" : $"{h - 12}:00 PM");
+
+            try { dlScheduleHour.SelectedIndex = Cfg.ScheduleHour; } catch { dlScheduleHour.SelectedIndex = 12; }
+
+            dlScheduleHour.SelectedIndexChanged += (s, e) => { Cfg.ScheduleHour = dlScheduleHour.SelectedIndex; SaveCfg(); };
+            dlScheduleDay.SelectedIndexChanged += (s, e) =>
+            {
+                if (dlAutoCheck.SelectedIndex == 2) Cfg.ScheduleWeekDay = dlScheduleDay.SelectedIndex;
+                else Cfg.ScheduleMonthDay = dlScheduleDay.SelectedIndex;
+                SaveCfg();
+            };
+
+            UpdateScheduleVisibility();
+        }
+
+        private void UpdateScheduleVisibility()
+        {
+            int mode = dlAutoCheck.SelectedIndex; // 0=No, 1=Daily, 2=Weekly, 3=Monthly
+            bool showHour = mode > 0;
+            bool showDay = mode >= 2;
+
+            dlScheduleHour.Visible = showHour;
+            lblScheduleOn.Visible = showDay;
+            dlScheduleDay.Visible = showDay;
+
+            if (!showDay) return;
+
+            int savedIdx = dlScheduleDay.SelectedIndex;
+            dlScheduleDay.Items.Clear();
+            if (mode == 2) // Weekly
+            {
+                dlScheduleDay.Items.AddRange(new object[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" });
+                dlScheduleDay.SelectedIndex = Math.Min(Math.Max(Cfg.ScheduleWeekDay, 0), 6);
+            }
+            else // Monthly
+            {
+                for (int i = 1; i <= 28; i++) dlScheduleDay.Items.Add(i.ToString());
+                dlScheduleDay.SelectedIndex = Math.Min(Math.Max(Cfg.ScheduleMonthDay, 0), 27);
+            }
+
+        }
+
+        private int GetScheduledHour() => dlScheduleHour?.SelectedIndex ?? 12;
+
+        private int GetScheduledWeekDay() => dlScheduleDay?.SelectedIndex ?? 1; // Mon
+
+        private int GetScheduledMonthDay() => (dlScheduleDay?.SelectedIndex ?? 0) + 1; // 1-28
 
         private void RefreshWifiProfiles()
         {
@@ -784,7 +906,7 @@ namespace wumgr
         {
             if (btnWifiNow == null) return;
             bool connected = WifiManager.IsWifiConnected();
-            btnWifiNow.Text = (mWifiConnectedByUs && connected) ? "Disconnect Now" : "Connect Now";
+            btnWifiNow.Text = connected ? "Disconnect Now" : "Connect Now";
             if (lblWifiStatus != null)
                 lblWifiStatus.Text = connected ? "WiFi: connected" : "WiFi: not connected";
         }
@@ -793,9 +915,12 @@ namespace wumgr
         {
             try
             {
-                if (mWifiConnectedByUs && WifiManager.IsWifiConnected())
+                if (WifiManager.IsWifiConnected())
                 {
-                    WifiDisconnect();
+                    AppLog.Line("WiFi: disconnecting");
+                    await Task.Run(() => WifiManager.Disconnect());
+                    mWifiConnectedByUs = false;
+                    UpdateWifiButton();
                     return;
                 }
                 await ConnectWifiAsync();
@@ -848,14 +973,16 @@ namespace wumgr
             ignoreChecks = true;
             updateView.CheckBoxes = CurrentList != UpdateLists.UpdateHistory;
             ignoreChecks = false;
-            updateView.ForeColor = updateView.CheckBoxes && !agent.IsValid() ? SystemColors.GrayText : SystemColors.WindowText;
+            bool isDark = Cfg.ColorMode.Equals("dark", StringComparison.OrdinalIgnoreCase);
+            Color normalColor = isDark ? s_darkFg : SystemColors.WindowText;
+            updateView.ForeColor = updateView.CheckBoxes && !agent.IsValid() ? SystemColors.GrayText : normalColor;
 
             switch (CurrentList)
             {
-                case UpdateLists.PendingUpdates:    LoadList(agent.mPendingUpdates); break;
-                case UpdateLists.InstaledUpdates:   LoadList(agent.mInstalledUpdates); break;
-                case UpdateLists.HiddenUpdates:     LoadList(agent.mHiddenUpdates); break;
-                case UpdateLists.UpdateHistory:     LoadList(agent.mUpdateHistory); break;
+                case UpdateLists.PendingUpdates: LoadList(agent.mPendingUpdates); break;
+                case UpdateLists.InstaledUpdates: LoadList(agent.mInstalledUpdates); break;
+                case UpdateLists.HiddenUpdates: LoadList(agent.mHiddenUpdates); break;
+                case UpdateLists.UpdateHistory: LoadList(agent.mUpdateHistory); break;
             }
         }
 
@@ -863,7 +990,10 @@ namespace wumgr
         {
             string INIPath = Program.wrkPath + @"\Updates.ini";
 
+            foreach (ListViewItem old in updateView.Items)
+                if (old.Font != updateView.Font) old.Font?.Dispose();
             updateView.Items.Clear();
+            updateView.Groups.Clear();
             List<ListViewItem> items = new List<ListViewItem>();
             for (int i = 0; i < List.Count; i++)
             {
@@ -896,7 +1026,7 @@ namespace wumgr
                         }
                         else if ((Update.Attributes & (int)MsUpdate.UpdateAttr.Hidden) != 0)
                         {
-                            State += Translate.fmt("stat_block"); 
+                            State += Translate.fmt("stat_block");
                             if ((Update.Attributes & (int)MsUpdate.UpdateAttr.Downloaded) != 0)
                                 State += " " + Translate.fmt("stat_dl");
                         }
@@ -916,7 +1046,7 @@ namespace wumgr
                             State += ", " + Translate.fmt("stat_excl");
 
                         if ((Update.Attributes & (int)MsUpdate.UpdateAttr.Reboot) != 0)
-                            State += ", " + Translate.fmt("stat_reboot"); 
+                            State += ", " + Translate.fmt("stat_reboot");
                         break;
                 }
 
@@ -995,7 +1125,8 @@ namespace wumgr
             return updates;
         }
 
-        enum UpdateLists {
+        enum UpdateLists
+        {
             PendingUpdates,
             InstaledUpdates,
             HiddenUpdates,
@@ -1116,7 +1247,7 @@ namespace wumgr
         {
             ProcessStartInfo startInfo = Program.PrepExec(exec, silent);
             startInfo.WorkingDirectory = dir;
-            if(!Program.DoExec(startInfo))
+            if (!Program.DoExec(startInfo))
                 MessageBox.Show(Translate.fmt("msg_tool_err"), Program.mName);
         }
 
@@ -1186,7 +1317,8 @@ namespace wumgr
             {
                 if (agent.IsActive())
                     await agent.UpdateHistoryAsync();
-                SwitchList(UpdateLists.UpdateHistory);
+                if (btnHistory.Checked)
+                    SwitchList(UpdateLists.UpdateHistory);
             }
             catch (Exception ex) { AppLog.Line("History load error: {0}", ex.Message); }
         }
@@ -1214,22 +1346,33 @@ namespace wumgr
             catch (Exception ex) { AppLog.Line("Search error: {0}", ex.Message); }
         }
 
-        private void btnDownload_Click(object sender, EventArgs e)
+        private async void btnDownload_Click(object sender, EventArgs e)
         {
-            if (!chkManual.Checked && !MiscFunc.IsAdministrator())
+            try
             {
-                MessageBox.Show(Translate.fmt("msg_admin_dl"), Program.mName);
-                return;
-            }
+                if (!chkManual.Checked && !MiscFunc.IsAdministrator())
+                {
+                    MessageBox.Show(Translate.fmt("msg_admin_dl"), Program.mName);
+                    return;
+                }
 
-            if (!agent.IsActive() || agent.IsBusy())
-                return;
-            WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
-            if (chkManual.Checked)
-                ret = agent.DownloadUpdatesManually(GetUpdates());
-            else
-                ret = agent.DownloadUpdates(GetUpdates());
-            ShowResult(WuAgent.AgentOperation.DownloadingUpdates, ret);
+                if (!agent.IsActive() || agent.IsBusy())
+                    return;
+
+                if (chkWifiConnect?.Checked == true && !WifiManager.IsWifiConnected())
+                {
+                    if (!await ConnectWifiAsync())
+                        return;
+                }
+
+                WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
+                if (chkManual.Checked)
+                    ret = agent.DownloadUpdatesManually(GetUpdates());
+                else
+                    ret = agent.DownloadUpdates(GetUpdates());
+                ShowResult(WuAgent.AgentOperation.DownloadingUpdates, ret);
+            }
+            catch (Exception ex) { AppLog.Line("Download error: {0}", ex.Message); }
         }
 
         private void btnInstall_Click(object sender, EventArgs e)
@@ -1278,19 +1421,22 @@ namespace wumgr
 
         private void btnGetLink_Click(object sender, EventArgs e)
         {
-            string Links = "";
+            if ((DateTime.Now - mLastGetLink).TotalSeconds < 10) return;
+            mLastGetLink = DateTime.Now;
+            var sb = new System.Text.StringBuilder();
             foreach (MsUpdate Update in GetUpdates())
             {
-                Links += Update.Title + "\r\n";
+                sb.AppendLine(Update.Title);
                 foreach (string url in Update.Downloads)
-                    Links += url + "\r\n";
-                Links += "\r\n";
+                    sb.AppendLine(url);
+                sb.AppendLine();
             }
 
-            if (Links.Length != 0)
+            if (sb.Length != 0)
             {
-                Clipboard.SetText(Links);
-                AppLog.Line("Update Download Links copyed to clipboard");
+                Clipboard.Clear();
+                Clipboard.SetText(sb.ToString());
+                AppLog.Line("Update download links copied to clipboard");
             }
             else
                 AppLog.Line("No updates selected");
@@ -1306,12 +1452,12 @@ namespace wumgr
             switch (op)
             {
                 case WuAgent.AgentOperation.CheckingUpdates: return Translate.fmt("op_check");
-                case WuAgent.AgentOperation.PreparingCheck: return Translate.fmt("op_prep"); 
+                case WuAgent.AgentOperation.PreparingCheck: return Translate.fmt("op_prep");
                 case WuAgent.AgentOperation.PreparingUpdates:
-                case WuAgent.AgentOperation.DownloadingUpdates: return Translate.fmt("op_dl"); 
-                case WuAgent.AgentOperation.InstallingUpdates: return Translate.fmt("op_inst"); 
-                case WuAgent.AgentOperation.RemoveingUpdates: return Translate.fmt("op_rem"); 
-                case WuAgent.AgentOperation.CancelingOperation: return Translate.fmt("op_cancel"); 
+                case WuAgent.AgentOperation.DownloadingUpdates: return Translate.fmt("op_dl");
+                case WuAgent.AgentOperation.InstallingUpdates: return Translate.fmt("op_inst");
+                case WuAgent.AgentOperation.RemoveingUpdates: return Translate.fmt("op_rem");
+                case WuAgent.AgentOperation.CancelingOperation: return Translate.fmt("op_cancel");
             }
             return Translate.fmt("op_unk");
         }
@@ -1331,10 +1477,10 @@ namespace wumgr
                 progTotal.Style = ProgressBarStyle.Continuous;
                 progTotal.MarqueeAnimationSpeed = 0;
 
-                if(args.TotalPercent >= 0 && args.TotalPercent <= 100)
+                if (args.TotalPercent >= 0 && args.TotalPercent <= 100)
                     progTotal.Value = args.TotalPercent;
 
-                if(args.TotalCount > 1)
+                if (args.TotalCount > 1)
                     Status += " " + args.CurrentIndex + "/" + args.TotalCount;
 
                 if (args.CurrentPercent > 0)
@@ -1360,14 +1506,14 @@ namespace wumgr
             if (args.Found) // if (agent.CurOperation() == WuAgent.AgentOperation.CheckingUpdates)
             {
                 LastCheck = DateTime.Now;
-                SetConfig("LastCheck", LastCheck.ToString());
+                Cfg.LastCheck = LastCheck.ToString(); SaveCfg();
                 SwitchList(UpdateLists.PendingUpdates);
             }
             else
             {
                 LoadList();
 
-                if (MiscFunc.parseInt(Program.IniReadValue("Options", "Refresh", "0")) == 1 && (agent.CurOperation() == WuAgent.AgentOperation.InstallingUpdates || agent.CurOperation() == WuAgent.AgentOperation.RemoveingUpdates))
+                if (Cfg.Refresh && (agent.CurOperation() == WuAgent.AgentOperation.InstallingUpdates || agent.CurOperation() == WuAgent.AgentOperation.RemoveingUpdates))
                     doUpdte = true;
             }
         }
@@ -1448,7 +1594,7 @@ namespace wumgr
 
         private void dlSource_SelectedIndexChanged(object sender, EventArgs e)
         {
-            SetConfig("Source", dlSource.Text);
+            Cfg.Source = dlSource.Text; SaveCfg();
         }
 
         private void chkOffline_CheckedChanged(object sender, EventArgs e)
@@ -1456,17 +1602,17 @@ namespace wumgr
             dlSource.Enabled = !chkOffline.Checked;
             chkDownload.Enabled = chkOffline.Checked;
 
-            SetConfig("Offline", chkOffline.Checked ? "1" : "0");
+            Cfg.Offline = chkOffline.Checked; SaveCfg();
         }
 
         private void chkDownload_CheckedChanged(object sender, EventArgs e)
         {
-            SetConfig("Download", chkDownload.Checked ? "1" : "0");
+            Cfg.Download = chkDownload.Checked; SaveCfg();
         }
 
         private void chkOld_CheckedChanged(object sender, EventArgs e)
         {
-            SetConfig("IncludeOld", chkOld.Checked ? "1" : "0");
+            Cfg.IncludeOld = chkOld.Checked; SaveCfg();
         }
 
         private void chkDrivers_CheckStateChanged(object sender, EventArgs e)
@@ -1526,7 +1672,7 @@ namespace wumgr
                 {
                     bool test = GPO.GetDisableAU();
                     GPO.DisableAU(true);
-                    if(!test)
+                    if (!test)
                         MessageBox.Show(Translate.fmt("msg_disable_au"));
                 }
 
@@ -1618,7 +1764,7 @@ namespace wumgr
                 return;
             bool test = GPO.GetDisableAU();
             GPO.DisableAU(chkDisableAU.Checked);
-            if(test != chkDisableAU.Checked)
+            if (test != chkDisableAU.Checked)
                 MessageBox.Show(Translate.fmt("msg_disable_au"));
         }
 
@@ -1647,8 +1793,9 @@ namespace wumgr
         {
             if (mSuspendUpdate)
                 return;
-            SetConfig("AutoUpdate", dlAutoCheck.SelectedIndex.ToString());
+            Cfg.AutoUpdate = dlAutoCheck.SelectedIndex; SaveCfg();
             AutoUpdate = (AutoUpdateOptions)dlAutoCheck.SelectedIndex;
+            UpdateScheduleVisibility();
         }
 
         private void chkNoUAC_CheckedChanged(object sender, EventArgs e)
@@ -1670,7 +1817,7 @@ namespace wumgr
         private void chkManual_CheckedChanged(object sender, EventArgs e)
         {
             UpdateState();
-            SetConfig("Manual", chkManual.Checked ? "1" : "0");
+            Cfg.Manual = chkManual.Checked; SaveCfg();
         }
 
 
@@ -1679,7 +1826,7 @@ namespace wumgr
             if (mSuspendUpdate) return;
             string[] modes = { "system", "classic", "dark" };
             string mode = modes[dlColorMode.SelectedIndex];
-            SetConfig("ColorMode", mode);
+            Cfg.ColorMode = mode; SaveCfg();
             bool dark = mode.Equals("dark");
             if (dark)
                 Application.SetColorMode(SystemColorMode.Dark);
@@ -1689,7 +1836,7 @@ namespace wumgr
                 Application.SetColorMode(SystemColorMode.System);
             ApplyControlTheme(this, dark);
         }
-        
+
         private void chkHideWU_CheckedChanged(object sender, EventArgs e)
         {
             if (mSuspendUpdate)
@@ -1723,25 +1870,14 @@ namespace wumgr
         private void lblSupport_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             string target = e.Link.LinkData as string;
-            System.Diagnostics.Process.Start(target);
+            if (string.IsNullOrEmpty(target)) return;
+            System.Diagnostics.Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
         }
 
 
-        public string GetConfig(string name, string def = "")
-        {
-            return Program.IniReadValue("Options", name, def);
-            //var subKey = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Xanatos\Windows Update Manager", true);
-            //return subKey.GetValue(name, def).ToString();
-        }
-
-        public void SetConfig(string name, string value)
-        {
-            if (mSuspendUpdate)
-                return;
-            Program.IniWriteValue("Options", name, value.ToString());
-            //var subKey = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Xanatos\Windows Update Manager", true);
-            //subKey.SetValue(name, value);
-        }
+        // Thin helpers so callers don't all need to cast/convert individually
+        private static Program.AppSettings Cfg => Program.Settings;
+        private void SaveCfg() { if (!mSuspendUpdate) Program.SaveSettings(); }
 
         [DllImport("User32.dll")]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -1753,14 +1889,14 @@ namespace wumgr
                 allowshowdisplay = true;
                 this.Show();
             }
-            if(this.WindowState == FormWindowState.Minimized)
-                this.WindowState = FormWindowState.Normal;   
+            if (this.WindowState == FormWindowState.Minimized)
+                this.WindowState = FormWindowState.Normal;
             SetForegroundWindow(this.Handle);
         }
 
         private void updateView_ColumnClick(object sender, ColumnClickEventArgs e)
         {
-            if(updateView.ListViewItemSorter == null)
+            if (updateView.ListViewItemSorter == null)
                 updateView.ListViewItemSorter = new ListViewItemComparer();
             ((ListViewItemComparer)updateView.ListViewItemSorter).Update(e.Column);
             updateView.Sort();
@@ -1825,7 +1961,6 @@ namespace wumgr
             chkAll.Text = Translate.fmt("lbl_all");
 
             lblSupport.Text = Translate.fmt("lbl_support");
-            lblPatreon.Text = Translate.fmt("lbl_patreon");
             //string cc = "";
             //toolTip.SetToolTip(lblPatreon, cc);
 
@@ -1879,10 +2014,10 @@ namespace wumgr
                 string Info = "";
                 foreach (ListViewItem item in updateView.SelectedItems)
                 {
-                    if(Info.Length != 0)
+                    if (Info.Length != 0)
                         Info += "\r\n";
                     Info += item.Text;
-                    for(int i=1; i < item.SubItems.Count; i++)
+                    for (int i = 1; i < item.SubItems.Count; i++)
                         Info += "; " + item.SubItems[i].Text;
                 }
 
@@ -1913,7 +2048,7 @@ namespace wumgr
                 return;
 
             updateView.ShowGroups = chkGrupe.Checked;
-            SetConfig("GroupUpdates", chkGrupe.Checked ? "1" : "0");
+            Cfg.GroupUpdates = chkGrupe.Checked; SaveCfg();
         }
 
         bool checkChecks = false;
@@ -1941,12 +2076,14 @@ namespace wumgr
 
             ignoreChecks = true;
 
+#pragma warning disable CA1416 // Validate platform compatibility
             if (updateView.CheckedItems.Count == 0)
                 chkAll.CheckState = CheckState.Unchecked;
             else if (updateView.CheckedItems.Count == updateView.Items.Count)
                 chkAll.CheckState = CheckState.Checked;
             else
                 chkAll.CheckState = CheckState.Indeterminate;
+#pragma warning restore CA1416 // Validate platform compatibility
 
             ignoreChecks = false;
 
@@ -1955,7 +2092,13 @@ namespace wumgr
 
         private void lblPatreon_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            System.Diagnostics.Process.Start("https://www.patreon.com/DavidXanatos");
+            System.Diagnostics.Process.Start(new ProcessStartInfo("https://www.patreon.com/DavidXanatos") { UseShellExecute = true });
         }
+
+        private void tableLayoutPanel4_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
     }
 }
