@@ -83,6 +83,11 @@ Designed for systems that are kept offline most of the time (kiosks, secure work
 - Autostart with Windows (tray mode)
 - Color mode: System default, Light (classic), Dark
 
+### Settings & Portability
+- Settings are stored in `settings.json` alongside the executable
+- Settings are tied to the machine they were created on — if the machine ID changes, settings will reset automatically
+- The machine ID cannot be manually edited
+
 ---
 
 ## Changes from the Original

@@ -19,6 +19,9 @@
     <Compile Update="Common\ListViewExtended.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="settings.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="WuMgr.cs">
       <SubType>Form</SubType>
     </Compile>
