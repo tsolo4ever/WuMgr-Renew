@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using WUApiLib;
@@ -122,7 +123,14 @@ namespace wumgr
             return product.Length == 0 ? classification  : (product + "; " + classification);
         }
 
-        public void Invalidate() { Entry = null; }
+        public void Invalidate()
+        {
+            if (Entry != null)
+            {
+                try { Marshal.ReleaseComObject(Entry); } catch { }
+                Entry = null;
+            }
+        }
 
         public IUpdate GetUpdate()
         {

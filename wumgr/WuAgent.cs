@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using WUApiLib;//this is required to use the Interfaces given by microsoft. 
 using System.Threading;
 using System.Windows.Threading;
@@ -106,25 +107,28 @@ namespace wumgr
             {
                 Console.WriteLine("Update Services:");
                 mServiceList.Clear();
-                foreach (IUpdateService service in mUpdateServiceManager.Services)
+                var services = mUpdateServiceManager.Services;
+                try
                 {
-                    if (service.Name == mMyOfflineSvc)
+                    foreach (IUpdateService service in services)
                     {
-                        if (cleanUp)
+                        try
                         {
-                            try
+                            if (service.Name == mMyOfflineSvc)
                             {
-                                mUpdateServiceManager.RemoveService(service.ServiceID);
+                                if (cleanUp)
+                                {
+                                    try { mUpdateServiceManager.RemoveService(service.ServiceID); } catch { }
+                                }
+                                continue;
                             }
-                            catch { }
+                            Console.WriteLine(service.Name + ": " + service.ServiceID);
+                            mServiceList.Add(service.Name);
                         }
-                        continue;
+                        finally { Marshal.ReleaseComObject(service); }
                     }
-
-                    Console.WriteLine(service.Name + ": " + service.ServiceID);
-                    //AppLog.Line(service.Name + ": " + service.ServiceID);
-                    mServiceList.Add(service.Name);
                 }
+                finally { Marshal.ReleaseComObject(services); }
 
                 return true;
             }
@@ -171,21 +175,34 @@ namespace wumgr
 
         public bool TestService(string ID)
         {
-            foreach (IUpdateService service in mUpdateServiceManager.Services)
+            var services = mUpdateServiceManager.Services;
+            try
             {
-                if (service.ServiceID.Equals(ID))
-                    return true;
+                foreach (IUpdateService service in services)
+                {
+                    bool match = service.ServiceID.Equals(ID);
+                    Marshal.ReleaseComObject(service);
+                    if (match) return true;
+                }
             }
+            finally { Marshal.ReleaseComObject(services); }
             return false;
         }
 
         public string GetServiceName(string ID, bool bAdd = false)
         {
-            foreach (IUpdateService service in mUpdateServiceManager.Services)
+            var services = mUpdateServiceManager.Services;
+            try
             {
-                if (service.ServiceID.Equals(ID))
-                    return service.Name;
+                foreach (IUpdateService service in services)
+                {
+                    bool match = service.ServiceID.Equals(ID);
+                    string name = match ? service.Name : null;
+                    Marshal.ReleaseComObject(service);
+                    if (match) return name;
+                }
             }
+            finally { Marshal.ReleaseComObject(services); }
             if (bAdd == false)
                 return null;
             AddService(ID);
@@ -306,15 +323,21 @@ namespace wumgr
 
         private void SetOnline(string ServiceName)
         {
-            foreach (IUpdateService service in mUpdateServiceManager.Services)
+            var services = mUpdateServiceManager.Services;
+            try
             {
-                if (service.Name.Equals(ServiceName, StringComparison.CurrentCultureIgnoreCase))
+                foreach (IUpdateService service in services)
                 {
-                    mUpdateSearcher.ServerSelection = ServerSelection.ssDefault;
-                    mUpdateSearcher.ServiceID = service.ServiceID;
-                    //mUpdateSearcher.Online = true;
+                    bool match = service.Name.Equals(ServiceName, StringComparison.CurrentCultureIgnoreCase);
+                    if (match)
+                    {
+                        mUpdateSearcher.ServerSelection = ServerSelection.ssDefault;
+                        mUpdateSearcher.ServiceID = service.ServiceID;
+                    }
+                    Marshal.ReleaseComObject(service);
                 }
             }
+            finally { Marshal.ReleaseComObject(services); }
         }
 
         UpdateCallback mCallback = null;
@@ -802,32 +825,46 @@ namespace wumgr
                 return;
             }
 
+            foreach (var u in mPendingUpdates)   u.Invalidate();
+            foreach (var u in mInstalledUpdates) u.Invalidate();
+            foreach (var u in mHiddenUpdates)    u.Invalidate();
             mPendingUpdates.Clear();
             mInstalledUpdates.Clear();
             mHiddenUpdates.Clear();
             mIsValid = true;
 
-            foreach (IUpdate update in SearchResults.Updates)
+            var updates = SearchResults.Updates;
+            try
             {
-                if (update.IsHidden)
-                    mHiddenUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Hidden));
-                else if (update.IsInstalled)
-                    mInstalledUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Installed));
-                else
-                    mPendingUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Pending));
-                Console.WriteLine(update.Title);
+                foreach (IUpdate update in updates)
+                {
+                    if (update.IsHidden)
+                        mHiddenUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Hidden));
+                    else if (update.IsInstalled)
+                        mInstalledUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Installed));
+                    else
+                        mPendingUpdates.Add(new MsUpdate(update, MsUpdate.UpdateState.Pending));
+                    Console.WriteLine(update.Title);
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(updates);
             }
 
             AppLog.Line("Found {0} pending updates.", mPendingUpdates.Count);
 
+            var resultCode = SearchResults.ResultCode;
+            Marshal.ReleaseComObject(SearchResults);
+
             OnUpdatesChanged(true);
 
             RetCodes ret = RetCodes.Undefined;
-            if (SearchResults.ResultCode == OperationResultCode.orcSucceeded || SearchResults.ResultCode == OperationResultCode.orcSucceededWithErrors)
+            if (resultCode == OperationResultCode.orcSucceeded || resultCode == OperationResultCode.orcSucceededWithErrors)
                 ret = RetCodes.Success;
-            else if (SearchResults.ResultCode == OperationResultCode.orcAborted)
+            else if (resultCode == OperationResultCode.orcAborted)
                 ret = RetCodes.Abborted;
-            else if (SearchResults.ResultCode == OperationResultCode.orcFailed)
+            else if (resultCode == OperationResultCode.orcFailed)
                 ret = RetCodes.InternalError;
             OnFinished(ret);
         }

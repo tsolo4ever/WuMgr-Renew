@@ -104,7 +104,6 @@ namespace wumgr
         }
 
         private bool mSuspendUpdate = false;
-        GPO.Respect mGPORespect = GPO.Respect.Unknown;
 
         // Tray icons — priority-colored
         private Icon mTrayIconNone = null;
@@ -116,11 +115,6 @@ namespace wumgr
 
         // WiFi connect-for-updates state
         private bool mWifiConnectedByUs = false;
-        private ComboBox dlWifiProfile = null;
-        private CheckBox chkWifiConnect = null;
-        private CheckBox chkWifiDisconnect = null;
-        private Button btnWifiNow = null;
-        private Label lblWifiStatus = null;
 
         // Reboot-required blink state
         private bool mRebootRequired = false;
@@ -128,7 +122,6 @@ namespace wumgr
         private System.Windows.Forms.Timer mBlinkTimer = null;
         private ToolStripMenuItem tsReboot = null;
         private ToolStripSeparator tsRebootSep = null;
-        float mWinVersion = 0.0f;
 
         enum AutoUpdateOptions
         {
@@ -210,112 +203,39 @@ namespace wumgr
             }
 
             mSuspendUpdate = true;
-            chkDrivers.CheckState = (CheckState)GPO.GetDriverAU();
 
-            mGPORespect = GPO.GetRespect();
-            mWinVersion = GPO.GetWinVersion();
-
-            if (mWinVersion < 10) // 8.1 or below
-                chkHideWU.Enabled = false;
-            chkHideWU.Checked = GPO.IsUpdatePageHidden();
-
-            if (mGPORespect == GPO.Respect.Partial || mGPORespect == GPO.Respect.None)
-                radSchedule.Enabled = radDownload.Enabled = radNotify.Enabled = false;
-            else if (mGPORespect == GPO.Respect.Unknown)
+            if (GPO.GetRespect() == GPO.Respect.Unknown)
                 AppLog.Line("Unrecognized Windows Edition, respect for GPO settings is unknown.");
 
-            if (mGPORespect == GPO.Respect.None)
-                chkBlockMS.Enabled = false;
-            chkBlockMS.CheckState = (CheckState)GPO.GetBlockMS();
-
-            int day, time;
-            switch (GPO.GetAU(out day, out time))
-            {
-                case GPO.AUOptions.Default: radDefault.Checked = true; break;
-                case GPO.AUOptions.Disabled: radDisable.Checked = true; break;
-                case GPO.AUOptions.Notification: radNotify.Checked = true; break;
-                case GPO.AUOptions.Download: radDownload.Checked = true; break;
-                case GPO.AUOptions.Scheduled: radSchedule.Checked = true; break;
-            }
-            try
-            {
-                dlShDay.SelectedIndex = day; dlShTime.SelectedIndex = time;
-            }
-            catch { }
-
-            if (mWinVersion >= 10) // 10 or abive
-                chkDisableAU.Checked = GPO.GetDisableAU();
-
-            if (mWinVersion < 6.2) // win 7 or below
-                chkStore.Enabled = false;
-            chkStore.Checked = GPO.GetStoreAU();
-
-            try
-            {
-                dlAutoCheck.SelectedIndex = Cfg.AutoUpdate;
-            }
-            catch { }
-            chkAutoRun.Checked = Program.IsAutoStart();
-            if (MiscFunc.IsRunningAsUwp() && chkAutoRun.CheckState == CheckState.Checked)
-                chkAutoRun.Enabled = false;
-            IdleDelay = Cfg.IdleDelay;
-            chkNoUAC.Checked = Program.IsSkipUacRun();
-            chkNoUAC.Enabled = MiscFunc.IsAdministrator();
-            chkNoUAC.Visible = chkNoUAC.Enabled || chkNoUAC.Checked || !MiscFunc.IsRunningAsUwp();
-
-
-            chkOffline.Checked = Cfg.Offline;
-            chkDownload.Checked = Cfg.Download;
-            chkManual.Checked = Cfg.Manual;
-
-            string savedMode = Cfg.ColorMode;
-            dlColorMode.SelectedIndex = savedMode.Equals("classic", StringComparison.OrdinalIgnoreCase) ? 1
-                : savedMode.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
-
-            if (!MiscFunc.IsAdministrator())
-            {
-                if (MiscFunc.IsRunningAsUwp())
-                {
-                    chkOffline.Enabled = false;
-                    chkOffline.Checked = false;
-
-                    chkManual.Enabled = false;
-                    chkManual.Checked = true;
-                }
-                chkMsUpd.Enabled = false;
-            }
-            chkMsUpd.Checked = agent.IsActive() && agent.TestService(WuAgent.MsUpdGUID);
-
-            // Note: when running in the UWP sandbox we cant write the real registry even as admins
-            if (!MiscFunc.IsAdministrator() || MiscFunc.IsRunningAsUwp())
-            {
-                foreach (Control ctl in tabAU.Controls)
-                    ctl.Enabled = false;
-            }
-
-            chkOld.Checked = Cfg.IncludeOld;
-            string source = Cfg.Source;
-
+            // Apply command-line overrides to Cfg (settings dialog will reflect them when opened)
             string Online = Program.GetArg("-online");
             if (Online != null)
             {
-                chkOffline.Checked = false;
+                Cfg.Offline = false;
                 if (Online.Length > 0)
-                    source = agent.GetServiceName(Online, true);
+                    Cfg.Source = agent.GetServiceName(Online, true);
             }
 
             string Offline = Program.GetArg("-offline");
             if (Offline != null)
             {
-                chkOffline.Checked = true;
+                Cfg.Offline = true;
                 if (Offline.Equals("download", StringComparison.CurrentCultureIgnoreCase))
-                    chkDownload.Checked = true;
+                    Cfg.Download = true;
                 else if (Offline.Equals("no_download", StringComparison.CurrentCultureIgnoreCase))
-                    chkDownload.Checked = false;
+                    Cfg.Download = false;
             }
 
             if (Program.TestArg("-manual"))
-                chkManual.Checked = true;
+                Cfg.Manual = true;
+
+            IdleDelay = Cfg.IdleDelay;
+            bool autoRun = Program.IsAutoStart();
+            AutoUpdate = autoRun ? (AutoUpdateOptions)Cfg.AutoUpdate : AutoUpdateOptions.No;
+
+            string savedMode = Cfg.ColorMode;
+            dlColorMode.SelectedIndex = savedMode.Equals("classic", StringComparison.OrdinalIgnoreCase) ? 1
+                : savedMode.Equals("dark", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
 
             try
             {
@@ -327,8 +247,6 @@ namespace wumgr
                 LastCheck = DateTime.Now;
             }
 
-            LoadProviders(source);
-
             mSearchBoxHeight = this.panelList.RowStyles[2].Height;
             this.panelList.RowStyles[2].Height = 0;
 
@@ -336,10 +254,6 @@ namespace wumgr
             updateView.ShowGroups = chkGrupe.Checked;
 
             mSuspendUpdate = false;
-
-
-            if (Program.TestArg("-provisioned"))
-                tabs.Enabled = false;
 
 
             // Build Tools popup via Win32 — MenuItem is non-functional in .NET 10
@@ -386,9 +300,6 @@ namespace wumgr
             mBlinkTimer = new System.Windows.Forms.Timer();
             mBlinkTimer.Interval = 600;
             mBlinkTimer.Tick += BlinkTick;
-
-            BuildWifiTab();
-            BuildScheduleControls();
 
             IntPtr MenuHandle = GetSystemMenu(this.Handle, false); // Note: to restore default set true
             InsertMenu(MenuHandle, 5, MF_BYPOSITION | MF_SEPARATOR, 0, string.Empty);
@@ -575,10 +486,10 @@ namespace wumgr
             if ((doUpdte || (updateNow && !ResultShown)) && agent.IsActive())
             {
                 doUpdte = false;
-                if (chkOffline.Checked)
-                    agent.SearchForUpdates(chkDownload.Checked, chkOld.Checked);
+                if (Cfg.Offline)
+                    agent.SearchForUpdates(Cfg.Download, Cfg.IncludeOld);
                 else
-                    agent.SearchForUpdates(dlSource.Text, chkOld.Checked);
+                    agent.SearchForUpdates(Cfg.Source, Cfg.IncludeOld);
             }
 
             if (bUpdateList)
@@ -674,6 +585,21 @@ namespace wumgr
             agent.Progress -= OnProgress;
             agent.UpdatesChaged -= OnUpdates;
             agent.Finished -= OnFinished;
+            AppLog.Logger -= LineLogger;
+            Program.ipc.PipeMessage -= PipesMessageHandler;
+
+            mTimer.Stop();
+            mTimer.Tick -= OnTimedEvent;
+            mTimer.Dispose();
+            mBlinkTimer?.Stop();
+            mBlinkTimer.Tick -= BlinkTick;
+            mBlinkTimer?.Dispose();
+
+            notifyIcon.Visible = false;
+            mTrayIconNone?.Dispose();
+            mTrayIconDriver?.Dispose();
+            mTrayIconNonCritical?.Dispose();
+            mTrayIconSecurity?.Dispose();
         }
 
         private void notifyIcon_MouseClick(object sender, MouseEventArgs e)
@@ -691,19 +617,6 @@ namespace wumgr
                 if (this.WindowState == FormWindowState.Minimized)
                     this.WindowState = FormWindowState.Normal;
                 SetForegroundWindow(this.Handle);
-            }
-        }
-
-        private void LoadProviders(string source = null)
-        {
-            dlSource.Items.Clear();
-            for (int i = 0; i < agent.mServiceList.Count; i++)
-            {
-                string service = agent.mServiceList[i];
-                dlSource.Items.Add(service);
-
-                if (source != null && service.Equals(source, StringComparison.CurrentCultureIgnoreCase))
-                    dlSource.SelectedIndex = i;
             }
         }
 
@@ -791,146 +704,13 @@ namespace wumgr
             }
         }
 
-        private void BuildWifiTab()
-        {
-            var tabWifi = new TabPage("WiFi");
-            tabWifi.UseVisualStyleBackColor = false;
-
-            var gb = new GroupBox { Text = "WiFi for Updates", Location = new System.Drawing.Point(3, 3), Size = new System.Drawing.Size(172, 175) };
-
-            var lblProfile = new Label { Text = "Profile:", AutoSize = true, Location = new System.Drawing.Point(6, 20) };
-
-            dlWifiProfile = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Location = new System.Drawing.Point(6, 35), Size = new System.Drawing.Size(135, 21) };
-
-            var btnRefresh = new Button { Text = "↻", Location = new System.Drawing.Point(143, 34), Size = new System.Drawing.Size(24, 23) };
-            btnRefresh.Click += (s, e) => RefreshWifiProfiles();
-
-            chkWifiConnect = new CheckBox { Text = "Connect before check/download", AutoSize = true, Location = new System.Drawing.Point(6, 64), UseVisualStyleBackColor = false };
-            chkWifiConnect.CheckedChanged += (s, e) => { Cfg.WifiAutoConnect = chkWifiConnect.Checked; SaveCfg(); };
-
-            chkWifiDisconnect = new CheckBox { Text = "Disconnect after download", AutoSize = true, Location = new System.Drawing.Point(6, 84), UseVisualStyleBackColor = false };
-            chkWifiDisconnect.CheckedChanged += (s, e) => { Cfg.WifiAutoDisconnect = chkWifiDisconnect.Checked; SaveCfg(); };
-
-            btnWifiNow = new Button { Text = "Connect Now", Location = new System.Drawing.Point(6, 108), Size = new System.Drawing.Size(160, 25) };
-            btnWifiNow.Click += BtnWifiNow_Click;
-
-            lblWifiStatus = new Label { Text = "", AutoSize = true, Location = new System.Drawing.Point(6, 140) };
-
-            gb.Controls.AddRange(new Control[] { lblProfile, dlWifiProfile, btnRefresh, chkWifiConnect, chkWifiDisconnect, btnWifiNow, lblWifiStatus });
-            tabWifi.Controls.Add(gb);
-            tabs.TabPages.Add(tabWifi);
-
-            // Restore saved settings
-            chkWifiConnect.Checked = Cfg.WifiAutoConnect;
-            chkWifiDisconnect.Checked = Cfg.WifiAutoDisconnect;
-            string savedProfile = Cfg.WifiProfile;
-
-            RefreshWifiProfiles();
-
-            if (savedProfile.Length > 0 && dlWifiProfile.Items.Contains(savedProfile))
-                dlWifiProfile.SelectedItem = savedProfile;
-
-            dlWifiProfile.SelectedIndexChanged += (s, e) =>
-            {
-                if (dlWifiProfile.SelectedItem != null)
-                    Cfg.WifiProfile = dlWifiProfile.SelectedItem.ToString(); SaveCfg();
-            };
-
-            UpdateWifiButton();
-        }
-
-        private void BuildScheduleControls()
-        {
-            for (int h = 0; h < 24; h++)
-                dlScheduleHour.Items.Add(h == 0 ? "12:00 AM" : h < 12 ? $"{h}:00 AM" : h == 12 ? "12:00 PM" : $"{h - 12}:00 PM");
-
-            try { dlScheduleHour.SelectedIndex = Cfg.ScheduleHour; } catch { dlScheduleHour.SelectedIndex = 12; }
-
-            dlScheduleHour.SelectedIndexChanged += (s, e) => { Cfg.ScheduleHour = dlScheduleHour.SelectedIndex; SaveCfg(); };
-            dlScheduleDay.SelectedIndexChanged += (s, e) =>
-            {
-                if (dlAutoCheck.SelectedIndex == 2) Cfg.ScheduleWeekDay = dlScheduleDay.SelectedIndex;
-                else Cfg.ScheduleMonthDay = dlScheduleDay.SelectedIndex;
-                SaveCfg();
-            };
-
-            UpdateScheduleVisibility();
-        }
-
-        private void UpdateScheduleVisibility()
-        {
-            int mode = dlAutoCheck.SelectedIndex; // 0=No, 1=Daily, 2=Weekly, 3=Monthly
-            bool showHour = mode > 0;
-            bool showDay = mode >= 2;
-
-            dlScheduleHour.Visible = showHour;
-            lblScheduleOn.Visible = showDay;
-            dlScheduleDay.Visible = showDay;
-
-            if (!showDay) return;
-
-            int savedIdx = dlScheduleDay.SelectedIndex;
-            dlScheduleDay.Items.Clear();
-            if (mode == 2) // Weekly
-            {
-                dlScheduleDay.Items.AddRange(new object[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" });
-                dlScheduleDay.SelectedIndex = Math.Min(Math.Max(Cfg.ScheduleWeekDay, 0), 6);
-            }
-            else // Monthly
-            {
-                for (int i = 1; i <= 28; i++) dlScheduleDay.Items.Add(i.ToString());
-                dlScheduleDay.SelectedIndex = Math.Min(Math.Max(Cfg.ScheduleMonthDay, 0), 27);
-            }
-
-        }
-
-        private int GetScheduledHour() => dlScheduleHour?.SelectedIndex ?? 12;
-
-        private int GetScheduledWeekDay() => dlScheduleDay?.SelectedIndex ?? 1; // Mon
-
-        private int GetScheduledMonthDay() => (dlScheduleDay?.SelectedIndex ?? 0) + 1; // 1-28
-
-        private void RefreshWifiProfiles()
-        {
-            string current = dlWifiProfile.SelectedItem?.ToString();
-            dlWifiProfile.Items.Clear();
-            foreach (string p in WifiManager.GetSavedProfiles())
-                dlWifiProfile.Items.Add(p);
-            if (current != null && dlWifiProfile.Items.Contains(current))
-                dlWifiProfile.SelectedItem = current;
-            else if (dlWifiProfile.Items.Count > 0)
-                dlWifiProfile.SelectedIndex = 0;
-        }
-
-        private void UpdateWifiButton()
-        {
-            if (btnWifiNow == null) return;
-            bool connected = WifiManager.IsWifiConnected();
-            btnWifiNow.Text = connected ? "Disconnect Now" : "Connect Now";
-            if (lblWifiStatus != null)
-                lblWifiStatus.Text = connected ? "WiFi: connected" : "WiFi: not connected";
-        }
-
-        private async void BtnWifiNow_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (WifiManager.IsWifiConnected())
-                {
-                    AppLog.Line("WiFi: disconnecting");
-                    await Task.Run(() => WifiManager.Disconnect());
-                    mWifiConnectedByUs = false;
-                    UpdateWifiButton();
-                    return;
-                }
-                await ConnectWifiAsync();
-            }
-            catch (Exception ex) { AppLog.Line("WiFi button error: {0}", ex.Message); }
-        }
+        private int GetScheduledHour()    => Cfg.ScheduleHour;
+        private int GetScheduledWeekDay()  => Cfg.ScheduleWeekDay;
+        private int GetScheduledMonthDay() => Cfg.ScheduleMonthDay;
 
         private async Task<bool> ConnectWifiAsync()
         {
-            string profile = dlWifiProfile.SelectedItem?.ToString();
+            string profile = Cfg.WifiProfile;
             if (string.IsNullOrEmpty(profile))
             {
                 AppLog.Line("WiFi: no profile selected");
@@ -942,10 +722,7 @@ namespace wumgr
                 return true;
             }
             AppLog.Line("WiFi: connecting to '{0}'", profile);
-            lblWifiStatus.Text = "WiFi: connecting...";
-            btnWifiNow.Enabled = false;
             bool ok = await Task.Run(() => WifiManager.Connect(profile)) && await WifiManager.WaitForConnectionAsync();
-            btnWifiNow.Enabled = true;
             if (ok)
             {
                 mWifiConnectedByUs = true;
@@ -955,7 +732,6 @@ namespace wumgr
             {
                 AppLog.Line("WiFi: failed to connect to '{0}'", profile);
             }
-            UpdateWifiButton();
             return ok;
         }
 
@@ -965,7 +741,6 @@ namespace wumgr
             AppLog.Line("WiFi: disconnecting");
             Task.Run(() => WifiManager.Disconnect());
             mWifiConnectedByUs = false;
-            UpdateWifiButton();
         }
 
         void LoadList()
@@ -1172,7 +947,7 @@ namespace wumgr
             lblStatus.Visible = busy;
 
             bool isValid = agent.IsValid();
-            bool isValid2 = isValid || chkManual.Checked;
+            bool isValid2 = isValid || Cfg.Manual;
 
             bool admin = MiscFunc.IsAdministrator() || !MiscFunc.IsRunningAsUwp();
 
@@ -1330,17 +1105,17 @@ namespace wumgr
                 if (!agent.IsActive() || agent.IsBusy())
                     return;
 
-                if (chkWifiConnect?.Checked == true && !WifiManager.IsWifiConnected())
+                if (Cfg.WifiAutoConnect && !WifiManager.IsWifiConnected())
                 {
                     if (!await ConnectWifiAsync())
                         return; // connect failed — don't search
                 }
 
                 WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
-                if (chkOffline.Checked)
-                    ret = agent.SearchForUpdates(chkDownload.Checked, chkOld.Checked);
+                if (Cfg.Offline)
+                    ret = agent.SearchForUpdates(Cfg.Download, Cfg.IncludeOld);
                 else
-                    ret = agent.SearchForUpdates(dlSource.Text, chkOld.Checked);
+                    ret = agent.SearchForUpdates(Cfg.Source, Cfg.IncludeOld);
                 ShowResult(WuAgent.AgentOperation.CheckingUpdates, ret);
             }
             catch (Exception ex) { AppLog.Line("Search error: {0}", ex.Message); }
@@ -1350,7 +1125,7 @@ namespace wumgr
         {
             try
             {
-                if (!chkManual.Checked && !MiscFunc.IsAdministrator())
+                if (!Cfg.Manual && !MiscFunc.IsAdministrator())
                 {
                     MessageBox.Show(Translate.fmt("msg_admin_dl"), Program.mName);
                     return;
@@ -1359,14 +1134,14 @@ namespace wumgr
                 if (!agent.IsActive() || agent.IsBusy())
                     return;
 
-                if (chkWifiConnect?.Checked == true && !WifiManager.IsWifiConnected())
+                if (Cfg.WifiAutoConnect && !WifiManager.IsWifiConnected())
                 {
                     if (!await ConnectWifiAsync())
                         return;
                 }
 
                 WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
-                if (chkManual.Checked)
+                if (Cfg.Manual)
                     ret = agent.DownloadUpdatesManually(GetUpdates());
                 else
                     ret = agent.DownloadUpdates(GetUpdates());
@@ -1386,7 +1161,7 @@ namespace wumgr
             if (!agent.IsActive() || agent.IsBusy())
                 return;
             WuAgent.RetCodes ret = WuAgent.RetCodes.Undefined;
-            if (chkManual.Checked)
+            if (Cfg.Manual)
                 ret = agent.DownloadUpdatesManually(GetUpdates(), true);
             else
                 ret = agent.DownloadUpdates(GetUpdates(), true);
@@ -1525,7 +1300,7 @@ namespace wumgr
             toolTip.SetToolTip(lblStatus, "");
 
             // Disconnect on any terminal state of download-related ops (success, cancel, failure)
-            if (mWifiConnectedByUs && chkWifiDisconnect?.Checked == true &&
+            if (mWifiConnectedByUs && Cfg.WifiAutoDisconnect &&
                 (args.Op == WuAgent.AgentOperation.DownloadingUpdates ||
                  args.Op == WuAgent.AgentOperation.PreparingCheck ||
                  args.Op == WuAgent.AgentOperation.CheckingUpdates ||
@@ -1542,7 +1317,7 @@ namespace wumgr
             if (reboot && op == WuAgent.AgentOperation.InstallingUpdates)
                 SetRebootRequired(true);
 
-            if (op == WuAgent.AgentOperation.DownloadingUpdates && chkManual.Checked)
+            if (op == WuAgent.AgentOperation.DownloadingUpdates && Cfg.Manual)
             {
                 if (ret == WuAgent.RetCodes.Success)
                 {
@@ -1592,234 +1367,20 @@ namespace wumgr
             ResultShown = false;
         }
 
-        private void dlSource_SelectedIndexChanged(object sender, EventArgs e)
+        private void btn_settings_Click(object sender, EventArgs e)
         {
-            Cfg.Source = dlSource.Text; SaveCfg();
+            using var dlg = new form_settings(agent);
+            dlg.ShowDialog(this);
+            ApplyRuntimeSettings();
         }
 
-        private void chkOffline_CheckedChanged(object sender, EventArgs e)
+        private void ApplyRuntimeSettings()
         {
-            dlSource.Enabled = !chkOffline.Checked;
-            chkDownload.Enabled = chkOffline.Checked;
-
-            Cfg.Offline = chkOffline.Checked; SaveCfg();
-        }
-
-        private void chkDownload_CheckedChanged(object sender, EventArgs e)
-        {
-            Cfg.Download = chkDownload.Checked; SaveCfg();
-        }
-
-        private void chkOld_CheckedChanged(object sender, EventArgs e)
-        {
-            Cfg.IncludeOld = chkOld.Checked; SaveCfg();
-        }
-
-        private void chkDrivers_CheckStateChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            GPO.ConfigDriverAU((int)chkDrivers.CheckState);
-        }
-
-        private void dlShDay_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            GPO.ConfigAU(GPO.AUOptions.Scheduled, dlShDay.SelectedIndex, dlShTime.SelectedIndex);
-        }
-
-        private void dlShTime_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            GPO.ConfigAU(GPO.AUOptions.Scheduled, dlShDay.SelectedIndex, dlShTime.SelectedIndex);
-        }
-
-        private void radGPO_CheckedChanged(object sender, EventArgs e)
-        {
-            dlShDay.Enabled = dlShTime.Enabled = radSchedule.Checked;
-
-            if (radDisable.Checked)
-            {
-                switch (mGPORespect)
-                {
-                    case GPO.Respect.Partial:
-                        if (chkBlockMS.Checked == true)
-                        {
-                            chkDisableAU.Enabled = true;
-                            break;
-                        }
-                        goto case GPO.Respect.None;
-                    case GPO.Respect.None:
-                        chkDisableAU.Enabled = false;
-                        chkDisableAU.Checked = true;
-                        break;
-                    case GPO.Respect.Full: // we can do whatever we want
-                        chkDisableAU.Enabled = mWinVersion >= 10;
-                        break;
-                }
-            }
-            else
-                chkDisableAU.Enabled = false;
-
-            if (mSuspendUpdate)
-                return;
-
-            if (radDisable.Checked)
-            {
-                if (chkDisableAU.Checked)
-                {
-                    bool test = GPO.GetDisableAU();
-                    GPO.DisableAU(true);
-                    if (!test)
-                        MessageBox.Show(Translate.fmt("msg_disable_au"));
-                }
-
-                GPO.ConfigAU(GPO.AUOptions.Disabled);
-            }
-            else
-            {
-                chkDisableAU.Checked = false; // Note: this triggers chkDisableAU_CheckedChanged
-
-                if (radNotify.Checked)
-                    GPO.ConfigAU(GPO.AUOptions.Notification);
-                else if (radDownload.Checked)
-                    GPO.ConfigAU(GPO.AUOptions.Download);
-                else if (radSchedule.Checked)
-                    GPO.ConfigAU(GPO.AUOptions.Scheduled, dlShDay.SelectedIndex, dlShTime.SelectedIndex);
-                else //if (radDefault.Checked)
-                    GPO.ConfigAU(GPO.AUOptions.Default);
-            }
-        }
-
-        private void chkBlockMS_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-
-            if (chkBlockMS.Checked)
-            {
-                var result = MessageBox.Show(
-                    "Blocking access to Windows Update servers will prevent this app from checking for updates.\n\n" +
-                    "Once enabled, disabling this option may require restarting the Windows Update service or rebooting before searches work again.\n\n" +
-                    "Are you sure?",
-                    Program.mName, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-                if (result == DialogResult.No)
-                {
-                    mSuspendUpdate = true;
-                    chkBlockMS.Checked = false;
-                    mSuspendUpdate = false;
-                    return;
-                }
-            }
-
-            if (radDisable.Checked && mGPORespect == GPO.Respect.Partial)
-            {
-                if (chkBlockMS.Checked)
-                {
-                    chkDisableAU.Enabled = true;
-                }
-                else
-                {
-                    if (!chkDisableAU.Checked)
-                    {
-                        switch (MessageBox.Show(Translate.fmt("msg_gpo"), Program.mName, MessageBoxButtons.YesNoCancel))
-                        {
-                            case DialogResult.Yes:
-                                chkDisableAU.Checked = true; // Note: this triggers chkDisableAU_CheckedChanged
-                                break;
-                            case DialogResult.No:
-                                radDefault.Checked = true;
-                                break;
-                            case DialogResult.Cancel:
-                                mSuspendUpdate = true;
-                                chkBlockMS.Checked = true;
-                                mSuspendUpdate = false;
-                                return;
-                        }
-                    }
-                    chkDisableAU.Enabled = false;
-                }
-            }
-
-            GPO.BlockMS(chkBlockMS.Checked);
-        }
-
-        private void chkDisableAU_CheckedChanged(object sender, EventArgs e)
-        {
-            if (chkDisableAU.Checked)
-            {
-                chkHideWU.Checked = true;
-                chkHideWU.Enabled = false;
-            }
-            else
-            {
-                //chkHideWU.Checked = false;
-                chkHideWU.Enabled = true;
-            }
-
-            if (mSuspendUpdate)
-                return;
-            bool test = GPO.GetDisableAU();
-            GPO.DisableAU(chkDisableAU.Checked);
-            if (test != chkDisableAU.Checked)
-                MessageBox.Show(Translate.fmt("msg_disable_au"));
-        }
-
-        private void chkAutoRun_CheckedChanged(object sender, EventArgs e)
-        {
-            notifyIcon.Visible = dlAutoCheck.Enabled = chkAutoRun.Checked;
-            AutoUpdate = chkAutoRun.Checked ? (AutoUpdateOptions)dlAutoCheck.SelectedIndex : AutoUpdateOptions.No;
-            if (mSuspendUpdate)
-                return;
-            if (chkAutoRun.CheckState == CheckState.Indeterminate)
-                return;
-            if (MiscFunc.IsRunningAsUwp())
-            {
-                if (chkAutoRun.CheckState == CheckState.Checked)
-                {
-                    mSuspendUpdate = true;
-                    chkAutoRun.CheckState = CheckState.Indeterminate;
-                    mSuspendUpdate = false;
-                }
-                return;
-            }
-            Program.AutoStart(chkAutoRun.Checked);
-        }
-
-        private void dlAutoCheck_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            Cfg.AutoUpdate = dlAutoCheck.SelectedIndex; SaveCfg();
-            AutoUpdate = (AutoUpdateOptions)dlAutoCheck.SelectedIndex;
-            UpdateScheduleVisibility();
-        }
-
-        private void chkNoUAC_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            Program.SkipUacEnable(chkNoUAC.Checked);
-        }
-
-        private void chkMsUpd_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            string source = dlSource.Text;
-            agent.EnableService(WuAgent.MsUpdGUID, chkMsUpd.Checked);
-            LoadProviders(source);
-        }
-
-        private void chkManual_CheckedChanged(object sender, EventArgs e)
-        {
+            bool autoRun = Program.IsAutoStart();
+            AutoUpdate = autoRun ? (AutoUpdateOptions)Cfg.AutoUpdate : AutoUpdateOptions.No;
+            IdleDelay = Cfg.IdleDelay;
             UpdateState();
-            Cfg.Manual = chkManual.Checked; SaveCfg();
         }
-
 
         private void dlColorMode_SelectedIndexChanged(object sender, EventArgs e)
         {
@@ -1835,20 +1396,6 @@ namespace wumgr
             else
                 Application.SetColorMode(SystemColorMode.System);
             ApplyControlTheme(this, dark);
-        }
-
-        private void chkHideWU_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            GPO.HideUpdatePage(chkHideWU.Checked);
-        }
-
-        private void chkStore_CheckedChanged(object sender, EventArgs e)
-        {
-            if (mSuspendUpdate)
-                return;
-            GPO.SetStoreAU(chkStore.Checked);
         }
 
         private void updateView_SelectedIndexChanged(object sender, EventArgs e)
@@ -1947,8 +1494,6 @@ namespace wumgr
             toolTip.SetToolTip(btnGetLink, Translate.fmt("tip_lnk"));
             toolTip.SetToolTip(btnUnInstall, Translate.fmt("tip_rem"));
             toolTip.SetToolTip(btnCancel, Translate.fmt("tip_cancel"));
-            toolTip.SetToolTip(chkManual, "Downloads installers and runs them directly. Not compatible with complex installers (e.g. Visual Studio). Use standard mode for those.");
-            toolTip.SetToolTip(chkBlockMS, "Warning: Blocks ALL connections to Windows Update servers,\nincluding searches from this app. Disable before checking for updates.");
 
             updateView.Columns[0].Text = Translate.fmt("col_title");
             updateView.Columns[1].Text = Translate.fmt("col_cat");
@@ -1961,42 +1506,7 @@ namespace wumgr
             chkAll.Text = Translate.fmt("lbl_all");
 
             lblSupport.Text = Translate.fmt("lbl_support");
-            //string cc = "";
-            //toolTip.SetToolTip(lblPatreon, cc);
-
             lblSearch.Text = Translate.fmt("lbl_search");
-
-            tabOptions.Text = Translate.fmt("lbl_opt");
-
-            chkOffline.Text = Translate.fmt("lbl_off");
-            chkDownload.Text = Translate.fmt("lbl_dl");
-            chkManual.Text = Translate.fmt("lbl_man");
-            chkOld.Text = Translate.fmt("lbl_old");
-            chkMsUpd.Text = Translate.fmt("lbl_ms");
-
-            gbStartup.Text = Translate.fmt("lbl_start");
-            chkAutoRun.Text = Translate.fmt("lbl_auto");
-            dlAutoCheck.Items.Clear();
-            dlAutoCheck.Items.Add(Translate.fmt("lbl_ac_no"));
-            dlAutoCheck.Items.Add(Translate.fmt("lbl_ac_day"));
-            dlAutoCheck.Items.Add(Translate.fmt("lbl_ac_week"));
-            dlAutoCheck.Items.Add(Translate.fmt("lbl_ac_month"));
-            chkNoUAC.Text = Translate.fmt("lbl_uac");
-
-
-            tabAU.Text = Translate.fmt("lbl_au");
-
-            chkBlockMS.Text = Translate.fmt("lbl_block_ms");
-            radDisable.Text = Translate.fmt("lbl_au_off");
-            chkDisableAU.Text = Translate.fmt("lbl_au_dissable");
-            radNotify.Text = Translate.fmt("lbl_au_notify");
-            radDownload.Text = Translate.fmt("lbl_au_dl");
-            radSchedule.Text = Translate.fmt("lbl_au_time");
-            radDefault.Text = Translate.fmt("lbl_au_def");
-            chkHideWU.Text = Translate.fmt("lbl_hide");
-            chkStore.Text = Translate.fmt("lbl_store");
-            chkDrivers.Text = Translate.fmt("lbl_drv");
-
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
