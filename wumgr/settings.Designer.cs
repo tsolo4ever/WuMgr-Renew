@@ -58,21 +58,27 @@
             dlShDay = new System.Windows.Forms.ComboBox();
             dlShTime = new System.Windows.Forms.ComboBox();
             tabWiFi = new System.Windows.Forms.TabPage();
-            tabParanoid = new System.Windows.Forms.TabPage();
-            tabWiFiconnectchk = new System.Windows.Forms.CheckBox();
-            tabWiFiDisconnectchk = new System.Windows.Forms.CheckBox();
-            tabWifiprofilecmb = new System.Windows.Forms.ComboBox();
             WiFiBox = new System.Windows.Forms.GroupBox();
-            tabWiFitogglebtn = new System.Windows.Forms.Button();
-            tabWiFiprofilelbl = new System.Windows.Forms.Label();
-            tabWiFIrefreshbtn = new System.Windows.Forms.Button();
             tabWiFistatuslbl = new System.Windows.Forms.Label();
+            tabWiFIrefreshbtn = new System.Windows.Forms.Button();
+            tabWiFiprofilelbl = new System.Windows.Forms.Label();
+            tabWiFitogglebtn = new System.Windows.Forms.Button();
+            tabWifiprofilecmb = new System.Windows.Forms.ComboBox();
+            tabWiFiDisconnectchk = new System.Windows.Forms.CheckBox();
+            tabWiFiconnectchk = new System.Windows.Forms.CheckBox();
+            tabParanoid = new System.Windows.Forms.TabPage();
+            tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
+            ck1_paranoid = new System.Windows.Forms.CheckBox();
+            ck2_paranoid = new System.Windows.Forms.CheckBox();
+            ck3_paranoid = new System.Windows.Forms.CheckBox();
             WiFiTab.SuspendLayout();
             tabOptions.SuspendLayout();
             gbStartup.SuspendLayout();
             tabAU.SuspendLayout();
             tabWiFi.SuspendLayout();
             WiFiBox.SuspendLayout();
+            tabParanoid.SuspendLayout();
+            tableLayoutPanel1.SuspendLayout();
             SuspendLayout();
             // 
             // WiFiTab
@@ -442,49 +448,6 @@
             tabWiFi.TabIndex = 2;
             tabWiFi.Text = "WiFi";
             // 
-            // tabParanoid
-            // 
-            tabParanoid.BackColor = System.Drawing.SystemColors.Control;
-            tabParanoid.Location = new System.Drawing.Point(4, 24);
-            tabParanoid.Name = "tabParanoid";
-            tabParanoid.Padding = new System.Windows.Forms.Padding(3);
-            tabParanoid.Size = new System.Drawing.Size(259, 252);
-            tabParanoid.TabIndex = 3;
-            tabParanoid.Text = "Paranoid";
-            // 
-            // tabWiFiconnectchk
-            // 
-            tabWiFiconnectchk.AutoSize = true;
-            tabWiFiconnectchk.Location = new System.Drawing.Point(6, 73);
-            tabWiFiconnectchk.Name = "tabWiFiconnectchk";
-            tabWiFiconnectchk.Size = new System.Drawing.Size(200, 19);
-            tabWiFiconnectchk.TabIndex = 0;
-            tabWiFiconnectchk.Text = "Connect before check/download";
-            tabWiFiconnectchk.UseVisualStyleBackColor = true;
-            tabWiFiconnectchk.UseWaitCursor = true;
-            // 
-            // tabWiFiDisconnectchk
-            // 
-            tabWiFiDisconnectchk.AutoSize = true;
-            tabWiFiDisconnectchk.Location = new System.Drawing.Point(6, 98);
-            tabWiFiDisconnectchk.Name = "tabWiFiDisconnectchk";
-            tabWiFiDisconnectchk.Size = new System.Drawing.Size(168, 19);
-            tabWiFiDisconnectchk.TabIndex = 1;
-            tabWiFiDisconnectchk.Text = "Disconnect after download";
-            tabWiFiDisconnectchk.UseVisualStyleBackColor = true;
-            tabWiFiDisconnectchk.UseWaitCursor = true;
-            // 
-            // tabWifiprofilecmb
-            // 
-            tabWifiprofilecmb.FormattingEnabled = true;
-            tabWifiprofilecmb.Location = new System.Drawing.Point(6, 44);
-            tabWifiprofilecmb.Name = "tabWifiprofilecmb";
-            tabWifiprofilecmb.RightToLeft = System.Windows.Forms.RightToLeft.No;
-            tabWifiprofilecmb.Size = new System.Drawing.Size(138, 23);
-            tabWifiprofilecmb.TabIndex = 2;
-            tabWifiprofilecmb.UseWaitCursor = true;
-            tabWifiprofilecmb.SelectedIndexChanged += comboBox1_SelectedIndexChanged;
-            // 
             // WiFiBox
             // 
             WiFiBox.Controls.Add(tabWiFistatuslbl);
@@ -504,14 +467,24 @@
             WiFiBox.Text = "WiFi for Updates";
             WiFiBox.UseWaitCursor = true;
             // 
-            // tabWiFitogglebtn
+            // tabWiFistatuslbl
             // 
-            tabWiFitogglebtn.Location = new System.Drawing.Point(6, 123);
-            tabWiFitogglebtn.Name = "tabWiFitogglebtn";
-            tabWiFitogglebtn.Size = new System.Drawing.Size(142, 36);
-            tabWiFitogglebtn.TabIndex = 3;
-            tabWiFitogglebtn.UseVisualStyleBackColor = true;
-            tabWiFitogglebtn.UseWaitCursor = true;
+            tabWiFistatuslbl.AutoSize = true;
+            tabWiFistatuslbl.Location = new System.Drawing.Point(6, 162);
+            tabWiFistatuslbl.Name = "tabWiFistatuslbl";
+            tabWiFistatuslbl.Size = new System.Drawing.Size(38, 15);
+            tabWiFistatuslbl.TabIndex = 7;
+            tabWiFistatuslbl.Text = "label3";
+            tabWiFistatuslbl.UseWaitCursor = true;
+            // 
+            // tabWiFIrefreshbtn
+            // 
+            tabWiFIrefreshbtn.Location = new System.Drawing.Point(146, 44);
+            tabWiFIrefreshbtn.Name = "tabWiFIrefreshbtn";
+            tabWiFIrefreshbtn.Size = new System.Drawing.Size(25, 23);
+            tabWiFIrefreshbtn.TabIndex = 5;
+            tabWiFIrefreshbtn.UseVisualStyleBackColor = true;
+            tabWiFIrefreshbtn.UseWaitCursor = true;
             // 
             // tabWiFiprofilelbl
             // 
@@ -521,23 +494,125 @@
             tabWiFiprofilelbl.Size = new System.Drawing.Size(44, 15);
             tabWiFiprofilelbl.TabIndex = 4;
             tabWiFiprofilelbl.Text = "Profile:";
+            tabWiFiprofilelbl.UseWaitCursor = true;
             // 
-            // tabWiFIrefreshbtn
+            // tabWiFitogglebtn
             // 
-            tabWiFIrefreshbtn.Location = new System.Drawing.Point(146, 44);
-            tabWiFIrefreshbtn.Name = "tabWiFIrefreshbtn";
-            tabWiFIrefreshbtn.Size = new System.Drawing.Size(25, 23);
-            tabWiFIrefreshbtn.TabIndex = 5;
-            tabWiFIrefreshbtn.UseVisualStyleBackColor = true;
+            tabWiFitogglebtn.Location = new System.Drawing.Point(6, 123);
+            tabWiFitogglebtn.Name = "tabWiFitogglebtn";
+            tabWiFitogglebtn.Size = new System.Drawing.Size(142, 36);
+            tabWiFitogglebtn.TabIndex = 3;
+            tabWiFitogglebtn.UseVisualStyleBackColor = true;
+            tabWiFitogglebtn.UseWaitCursor = true;
             // 
-            // tabWiFistatuslbl
+            // tabWifiprofilecmb
             // 
-            tabWiFistatuslbl.AutoSize = true;
-            tabWiFistatuslbl.Location = new System.Drawing.Point(6, 162);
-            tabWiFistatuslbl.Name = "tabWiFistatuslbl";
-            tabWiFistatuslbl.Size = new System.Drawing.Size(38, 15);
-            tabWiFistatuslbl.TabIndex = 7;
-            tabWiFistatuslbl.Text = "label3";
+            tabWifiprofilecmb.FormattingEnabled = true;
+            tabWifiprofilecmb.Location = new System.Drawing.Point(6, 44);
+            tabWifiprofilecmb.Name = "tabWifiprofilecmb";
+            tabWifiprofilecmb.RightToLeft = System.Windows.Forms.RightToLeft.No;
+            tabWifiprofilecmb.Size = new System.Drawing.Size(138, 23);
+            tabWifiprofilecmb.TabIndex = 2;
+            tabWifiprofilecmb.UseWaitCursor = true;
+            tabWifiprofilecmb.SelectedIndexChanged += comboBox1_SelectedIndexChanged;
+            // 
+            // tabWiFiDisconnectchk
+            // 
+            tabWiFiDisconnectchk.AutoSize = true;
+            tabWiFiDisconnectchk.Location = new System.Drawing.Point(6, 98);
+            tabWiFiDisconnectchk.Name = "tabWiFiDisconnectchk";
+            tabWiFiDisconnectchk.Size = new System.Drawing.Size(168, 19);
+            tabWiFiDisconnectchk.TabIndex = 1;
+            tabWiFiDisconnectchk.Text = "Disconnect after download";
+            tabWiFiDisconnectchk.UseVisualStyleBackColor = true;
+            tabWiFiDisconnectchk.UseWaitCursor = true;
+            // 
+            // tabWiFiconnectchk
+            // 
+            tabWiFiconnectchk.AutoSize = true;
+            tabWiFiconnectchk.Location = new System.Drawing.Point(6, 73);
+            tabWiFiconnectchk.Name = "tabWiFiconnectchk";
+            tabWiFiconnectchk.Size = new System.Drawing.Size(200, 19);
+            tabWiFiconnectchk.TabIndex = 0;
+            tabWiFiconnectchk.Text = "Connect before check/download";
+            tabWiFiconnectchk.UseVisualStyleBackColor = true;
+            tabWiFiconnectchk.UseWaitCursor = true;
+            // 
+            // tabParanoid
+            // 
+            tabParanoid.BackColor = System.Drawing.SystemColors.Control;
+            tabParanoid.Controls.Add(tableLayoutPanel1);
+            tabParanoid.Location = new System.Drawing.Point(4, 24);
+            tabParanoid.Name = "tabParanoid";
+            tabParanoid.Padding = new System.Windows.Forms.Padding(3);
+            tabParanoid.Size = new System.Drawing.Size(259, 262);
+            tabParanoid.TabIndex = 3;
+            tabParanoid.Text = "Paranoid";
+            // 
+            // tableLayoutPanel1
+            // 
+            tableLayoutPanel1.ColumnCount = 2;
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            tableLayoutPanel1.Controls.Add(ck3_paranoid, 0, 1);
+            tableLayoutPanel1.Controls.Add(ck2_paranoid, 1, 0);
+            tableLayoutPanel1.Controls.Add(ck1_paranoid, 0, 0);
+            tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
+            tableLayoutPanel1.Name = "tableLayoutPanel1";
+            tableLayoutPanel1.RowCount = 9;
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle());
+            tableLayoutPanel1.Size = new System.Drawing.Size(259, 262);
+            tableLayoutPanel1.TabIndex = 0;
+            // 
+            // ck1_paranoid
+            // 
+            ck1_paranoid.AutoCheck = false;
+            ck1_paranoid.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
+            ck1_paranoid.Checked = true;
+            ck1_paranoid.CheckState = System.Windows.Forms.CheckState.Checked;
+            ck1_paranoid.FlatStyle = System.Windows.Forms.FlatStyle.System;
+            ck1_paranoid.Location = new System.Drawing.Point(10, 0);
+            ck1_paranoid.Margin = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            ck1_paranoid.Name = "ck1_paranoid";
+            ck1_paranoid.Size = new System.Drawing.Size(119, 32);
+            ck1_paranoid.TabIndex = 0;
+            ck1_paranoid.Text = "   Encrypt Keys";
+            ck1_paranoid.UseVisualStyleBackColor = true;
+            ck1_paranoid.CheckedChanged += ck1_paranoid_CheckedChanged;
+            // 
+            // ck2_paranoid
+            // 
+            ck2_paranoid.AutoCheck = false;
+            ck2_paranoid.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
+            ck2_paranoid.FlatStyle = System.Windows.Forms.FlatStyle.System;
+            ck2_paranoid.Location = new System.Drawing.Point(139, 0);
+            ck2_paranoid.Margin = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            ck2_paranoid.Name = "ck2_paranoid";
+            ck2_paranoid.Size = new System.Drawing.Size(119, 32);
+            ck2_paranoid.TabIndex = 1;
+            ck2_paranoid.Text = "   Encrypt Settings";
+            ck2_paranoid.UseVisualStyleBackColor = true;
+            // 
+            // ck3_paranoid
+            // 
+            ck3_paranoid.AutoCheck = false;
+            ck3_paranoid.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
+            ck3_paranoid.FlatStyle = System.Windows.Forms.FlatStyle.System;
+            ck3_paranoid.Location = new System.Drawing.Point(10, 32);
+            ck3_paranoid.Margin = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            ck3_paranoid.Name = "ck3_paranoid";
+            ck3_paranoid.Size = new System.Drawing.Size(119, 32);
+            ck3_paranoid.TabIndex = 2;
+            ck3_paranoid.Text = "   WSUS";
+            ck3_paranoid.UseVisualStyleBackColor = true;
             // 
             // form_settings
             // 
@@ -558,6 +633,8 @@
             tabWiFi.ResumeLayout(false);
             WiFiBox.ResumeLayout(false);
             WiFiBox.PerformLayout();
+            tabParanoid.ResumeLayout(false);
+            tableLayoutPanel1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -602,5 +679,9 @@
         private System.Windows.Forms.Button tabWiFIrefreshbtn;
         private System.Windows.Forms.Label tabWiFiprofilelbl;
         private System.Windows.Forms.Label tabWiFistatuslbl;
+        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
+        private System.Windows.Forms.CheckBox ck1_paranoid;
+        private System.Windows.Forms.CheckBox ck2_paranoid;
+        private System.Windows.Forms.CheckBox ck3_paranoid;
     }
 }

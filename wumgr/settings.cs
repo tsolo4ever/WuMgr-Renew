@@ -76,11 +76,11 @@ namespace wumgr
             int day, time;
             switch (GPO.GetAU(out day, out time))
             {
-                case GPO.AUOptions.Default:      radDefault.Checked  = true; break;
-                case GPO.AUOptions.Disabled:     radDisable.Checked  = true; break;
-                case GPO.AUOptions.Notification: radNotify.Checked   = true; break;
-                case GPO.AUOptions.Download:     radDownload.Checked = true; break;
-                case GPO.AUOptions.Scheduled:    radSchedule.Checked = true; break;
+                case GPO.AUOptions.Default: radDefault.Checked = true; break;
+                case GPO.AUOptions.Disabled: radDisable.Checked = true; break;
+                case GPO.AUOptions.Notification: radNotify.Checked = true; break;
+                case GPO.AUOptions.Download: radDownload.Checked = true; break;
+                case GPO.AUOptions.Scheduled: radSchedule.Checked = true; break;
             }
             try { dlShDay.SelectedIndex = day; dlShTime.SelectedIndex = time; } catch { }
 
@@ -109,33 +109,33 @@ namespace wumgr
             UpdateWifiStatus();
 
             // Wire event handlers after populating so they don't fire during init
-            chkOffline.CheckedChanged        += chkOffline_CheckedChanged;
-            chkDownload.CheckedChanged       += chkDownload_CheckedChanged;
-            chkManual.CheckedChanged         += chkManual_CheckedChanged;
-            chkOld.CheckedChanged            += chkOld_CheckedChanged;
-            dlSource.SelectedIndexChanged    += dlSource_SelectedIndexChanged;
-            chkMsUpd.CheckedChanged          += chkMsUpd_CheckedChanged;
-            chkAutoRun.CheckedChanged        += chkAutoRun_CheckedChanged;
+            chkOffline.CheckedChanged += chkOffline_CheckedChanged;
+            chkDownload.CheckedChanged += chkDownload_CheckedChanged;
+            chkManual.CheckedChanged += chkManual_CheckedChanged;
+            chkOld.CheckedChanged += chkOld_CheckedChanged;
+            dlSource.SelectedIndexChanged += dlSource_SelectedIndexChanged;
+            chkMsUpd.CheckedChanged += chkMsUpd_CheckedChanged;
+            chkAutoRun.CheckedChanged += chkAutoRun_CheckedChanged;
             dlAutoCheck.SelectedIndexChanged += dlAutoCheck_SelectedIndexChanged;
             dlScheduleHour.SelectedIndexChanged += dlScheduleHour_SelectedIndexChanged;
-            dlScheduleDay.SelectedIndexChanged  += dlScheduleDay_SelectedIndexChanged;
-            chkNoUAC.CheckedChanged          += chkNoUAC_CheckedChanged;
-            chkBlockMS.CheckedChanged        += chkBlockMS_CheckedChanged;
-            radDisable.CheckedChanged        += radGPO_CheckedChanged;
-            radNotify.CheckedChanged         += radGPO_CheckedChanged;
-            radDownload.CheckedChanged       += radGPO_CheckedChanged;
-            radSchedule.CheckedChanged       += radGPO_CheckedChanged;
-            radDefault.CheckedChanged        += radGPO_CheckedChanged;
-            dlShDay.SelectedIndexChanged     += dlShDay_SelectedIndexChanged;
-            dlShTime.SelectedIndexChanged    += dlShTime_SelectedIndexChanged;
-            chkDisableAU.CheckedChanged      += chkDisableAU_CheckedChanged;
-            chkHideWU.CheckedChanged         += chkHideWU_CheckedChanged;
-            chkStore.CheckedChanged          += chkStore_CheckedChanged;
-            chkDrivers.CheckStateChanged     += chkDrivers_CheckStateChanged;
-            tabWiFiconnectchk.CheckedChanged    += tabWiFiconnectchk_CheckedChanged;
+            dlScheduleDay.SelectedIndexChanged += dlScheduleDay_SelectedIndexChanged;
+            chkNoUAC.CheckedChanged += chkNoUAC_CheckedChanged;
+            chkBlockMS.CheckedChanged += chkBlockMS_CheckedChanged;
+            radDisable.CheckedChanged += radGPO_CheckedChanged;
+            radNotify.CheckedChanged += radGPO_CheckedChanged;
+            radDownload.CheckedChanged += radGPO_CheckedChanged;
+            radSchedule.CheckedChanged += radGPO_CheckedChanged;
+            radDefault.CheckedChanged += radGPO_CheckedChanged;
+            dlShDay.SelectedIndexChanged += dlShDay_SelectedIndexChanged;
+            dlShTime.SelectedIndexChanged += dlShTime_SelectedIndexChanged;
+            chkDisableAU.CheckedChanged += chkDisableAU_CheckedChanged;
+            chkHideWU.CheckedChanged += chkHideWU_CheckedChanged;
+            chkStore.CheckedChanged += chkStore_CheckedChanged;
+            chkDrivers.CheckStateChanged += chkDrivers_CheckStateChanged;
+            tabWiFiconnectchk.CheckedChanged += tabWiFiconnectchk_CheckedChanged;
             tabWiFiDisconnectchk.CheckedChanged += tabWiFiDisconnectchk_CheckedChanged;
-            tabWiFIrefreshbtn.Click          += tabWiFIrefreshbtn_Click;
-            tabWiFitogglebtn.Click           += tabWiFitogglebtn_Click;
+            tabWiFIrefreshbtn.Click += tabWiFIrefreshbtn_Click;
+            tabWiFitogglebtn.Click += tabWiFitogglebtn_Click;
         }
 
         // ── Schedule helpers ──────────────────────────────────────────────────────
@@ -153,11 +153,11 @@ namespace wumgr
         {
             int mode = dlAutoCheck.SelectedIndex;
             bool showHour = mode > 0;
-            bool showDay  = mode >= 2;
+            bool showDay = mode >= 2;
 
             dlScheduleHour.Visible = showHour;
-            lblScheduleOn.Visible  = showDay;
-            dlScheduleDay.Visible  = showDay;
+            lblScheduleOn.Visible = showDay;
+            dlScheduleDay.Visible = showDay;
 
             if (!showDay) return;
 
@@ -178,7 +178,7 @@ namespace wumgr
 
         private void chkOffline_CheckedChanged(object sender, EventArgs e)
         {
-            dlSource.Enabled   = !chkOffline.Checked;
+            dlSource.Enabled = !chkOffline.Checked;
             chkDownload.Enabled = chkOffline.Checked;
             Cfg.Offline = chkOffline.Checked;
             Program.SaveSettings();
@@ -260,8 +260,8 @@ namespace wumgr
         private void dlScheduleDay_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (mSuspend) return;
-            if (dlAutoCheck.SelectedIndex == 2) Cfg.ScheduleWeekDay  = dlScheduleDay.SelectedIndex;
-            else                                Cfg.ScheduleMonthDay = dlScheduleDay.SelectedIndex;
+            if (dlAutoCheck.SelectedIndex == 2) Cfg.ScheduleWeekDay = dlScheduleDay.SelectedIndex;
+            else Cfg.ScheduleMonthDay = dlScheduleDay.SelectedIndex;
             Program.SaveSettings();
         }
 
@@ -523,8 +523,13 @@ namespace wumgr
         private void UpdateWifiStatus()
         {
             bool connected = WifiManager.IsWifiConnected();
-            tabWiFitogglebtn.Text  = connected ? "Disconnect Now" : "Connect Now";
-            tabWiFistatuslbl.Text  = connected ? "WiFi: connected" : "WiFi: not connected";
+            tabWiFitogglebtn.Text = connected ? "Disconnect Now" : "Connect Now";
+            tabWiFistatuslbl.Text = connected ? "WiFi: connected" : "WiFi: not connected";
+        }
+
+        private void ck1_paranoid_CheckedChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
